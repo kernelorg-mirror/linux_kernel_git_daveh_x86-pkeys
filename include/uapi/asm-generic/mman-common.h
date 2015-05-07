@@ -10,6 +10,10 @@
 #define PROT_WRITE	0x2		/* page can be written */
 #define PROT_EXEC	0x4		/* page can be executed */
 #define PROT_SEM	0x8		/* page may be used for atomic ops */
+#define PROT_PKEY0	0x10		/* protection key value (bit 0) */
+#define PROT_PKEY1	0x20		/* protection key value (bit 1) */
+#define PROT_PKEY2	0x40		/* protection key value (bit 2) */
+#define PROT_PKEY3	0x80		/* protection key value (bit 3) */
 #define PROT_NONE	0x0		/* page can not be accessed */
 #define PROT_GROWSDOWN	0x01000000	/* mprotect flag: extend change to start of growsdown vma */
 #define PROT_GROWSUP	0x02000000	/* mprotect flag: extend change to end of growsup vma */
