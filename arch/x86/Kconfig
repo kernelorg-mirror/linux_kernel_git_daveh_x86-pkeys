@@ -142,6 +142,7 @@ config X86
 	select ACPI_LEGACY_TABLES_LOOKUP if ACPI
 	select X86_FEATURE_NAMES if PROC_FS
 	select SRCU
+	select ARCH_USES_HIGH_VMA_FLAGS if X86_64
 
 config INSTRUCTION_DECODER
 	def_bool y
