@@ -572,6 +572,13 @@ void setup_xstate_comp(void)
 					+ xstate_comp_sizes[i-1];
 
 	}
+	/*
+	 * Check that the size of the "PKRU" xsave area
+	 * which the CPU knows about matches the kernel
+	 * data structure that we have defined.
+	 */
+	if ((xstate_features >= XSTATE_PKRU) && xstate_comp_sizes[XSTATE_PKRU])
+		WARN_ON(xstate_comp_sizes[XSTATE_PKRU] != sizeof(struct pkru));
 }
 
 /*

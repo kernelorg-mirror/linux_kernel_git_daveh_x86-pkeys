@@ -396,6 +396,15 @@ struct bndcsr {
 	u64 bndstatus;
 } __packed;
 
+/*
+ * "The size of XSAVE state component for PKRU is 8 bytes,
+ *  of which only the first four bytes are used...".
+ */
+struct pkru {
+	u32 pkru;
+	u32 pkru_unused;
+} __packed;
+
 struct xsave_hdr_struct {
 	u64 xstate_bv;
 	u64 xcomp_bv;
