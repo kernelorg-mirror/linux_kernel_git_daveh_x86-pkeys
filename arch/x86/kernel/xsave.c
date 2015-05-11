@@ -546,6 +546,12 @@ static void __init setup_init_fpu_buf(void)
 	 */
 	init_xstate_buf = alloc_bootmem_align(kernel_xstate_size,
 					      __alignof__(struct xsave_struct));
+
+	/*
+	 * Make sure xstate_bv is zero to allow init optimization work.
+	 */
+	init_xstate_buf->xsave_hdr.xstate_bv = 0;
+
 	fx_finit(&init_xstate_buf->i387);
 
 	if (!cpu_has_xsave)
@@ -553,11 +559,9 @@ static void __init setup_init_fpu_buf(void)
 
 	setup_xstate_features();
 
-	if (cpu_has_xsaves) {
+	if (cpu_has_xsaves)
 		init_xstate_buf->xsave_hdr.xcomp_bv =
 						(u64)1 << 63 | pcntxt_mask;
-		init_xstate_buf->xsave_hdr.xstate_bv = pcntxt_mask;
-	}
 
 	/*
 	 * Init all the features state with header_bv being 0x0
