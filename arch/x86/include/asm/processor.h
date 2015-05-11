@@ -386,16 +386,6 @@ struct i387_soft_struct {
 	u32			entry_eip;
 };
 
-struct ymmh_struct {
-	/* 16 * 16 bytes for each YMMH-reg = 256 bytes */
-	u32 ymmh_space[64];
-};
-
-/* We don't support LWP yet: */
-struct lwp_struct {
-	u8 reserved[128];
-};
-
 struct bndreg {
 	u64 lower_bound;
 	u64 upper_bound;
@@ -415,11 +405,11 @@ struct xsave_hdr_struct {
 struct xsave_struct {
 	struct i387_fxsave_struct i387;
 	struct xsave_hdr_struct xsave_hdr;
-	struct ymmh_struct ymmh;
-	struct lwp_struct lwp;
-	struct bndreg bndreg[4];
-	struct bndcsr bndcsr;
-	/* new processor state extensions will go here */
+	/*
+	 * Please don't add more states here. They are non-architectural.
+	 * Offset and size of each state should be calculated during boot time.
+	 * So adding states here is meanless.
+	 */
 } __attribute__ ((packed, aligned (64)));
 
 union thread_xstate {
