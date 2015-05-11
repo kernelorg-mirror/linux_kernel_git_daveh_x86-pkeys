@@ -252,6 +252,7 @@ static inline int xrestore_user(struct xsave_struct __user *buf, u64 mask)
 }
 
 void *get_xsave_addr(struct xsave_struct *xsave, int xstate);
+void *get_xsave_field(int xstate_field);
 void setup_xstate_comp(void);
 
 #endif
