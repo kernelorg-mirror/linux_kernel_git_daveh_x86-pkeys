@@ -465,23 +465,18 @@ static inline void xstate_enable(void)
  */
 static void __init setup_xstate_features(void)
 {
-	int eax, ebx, ecx, edx, leaf = 0x2;
+	int eax, ebx, ecx, edx, leaf;
 
 	xstate_features = fls64(pcntxt_mask);
 	xstate_offsets = alloc_bootmem(xstate_features * sizeof(int));
 	xstate_sizes = alloc_bootmem(xstate_features * sizeof(int));
 
-	do {
+	for (leaf = 2; leaf < xstate_features; leaf++) {
 		cpuid_count(XSTATE_CPUID, leaf, &eax, &ebx, &ecx, &edx);
-
-		if (eax == 0)
-			break;
 
 		xstate_offsets[leaf] = ebx;
 		xstate_sizes[leaf] = eax;
-
-		leaf++;
-	} while (1);
+	}
 }
 
 /*
