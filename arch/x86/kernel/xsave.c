@@ -217,6 +217,45 @@ static inline int save_user_xstate(struct xsave_struct __user *buf)
 	return err;
 }
 
+static int should_save_registers_directly(void)
+{
+	/*
+	 * This should only ever be called when we are actually
+	 * using the FPU.  Otherwise, we run the risk of using
+	 * some FPU instructions for saving the registers, and
+	 * inflating thread.fpu_counter, making us think that
+	 * the _task_ is using the FPU when in fact it was the
+	 * kernel.
+	 */
+	WARN_ONCE(!used_math(), "direct FPU save with no math use\n");
+
+	/*
+	 * In the case that we are using a compacted kernel
+	 * xsave area, we can not copy the thread.fpu.state
+	 * directly to userspace and *must* save it from the
+	 * registers directly.
+	 */
+	if (cpu_has_xsaves)
+		return 1;
+
+	/*
+	 * user_has_fpu() means "Can I use the FPU hardware
+	 * without taking a device-not-available exception?" This
+	 * means that saving the registers directly will be
+	 * cheaper than copying their contents out of
+	 * thread.fpu.state.
+	 *
+	 * Note that user_has_fpu() is inherently racy and may
+	 * become false at any time.  If this race happens, we
+	 * will take a harmless device-not-available exception
+	 * when we attempt the FPU save instruction.
+	 */
+	if (user_has_fpu())
+		return 1;
+
+	return 0;
+}
+
 /*
  * Save the fpu, extended register state to the user signal frame.
  *
@@ -254,7 +293,7 @@ int save_xstate_sig(void __user *buf, void __user *buf_fx, int size)
 			sizeof(struct user_i387_ia32_struct), NULL,
 			(struct _fpstate_ia32 __user *) buf) ? -1 : 1;
 
-	if (user_has_fpu()) {
+	if (should_save_registers_directly()) {
 		/* Save the live register state to the user directly. */
 		if (save_user_xstate(buf_fx))
 			return -1;
