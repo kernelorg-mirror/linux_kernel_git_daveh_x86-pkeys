@@ -8,6 +8,31 @@
 
 #ifdef CONFIG_X86_INTEL_MPX
 
+TRACE_EVENT(mpx_bounds_register_exception,
+
+	TP_PROTO(void *addr_referenced,
+		 struct bndreg *bndreg),
+	TP_ARGS(addr_referenced, bndreg),
+
+	TP_STRUCT__entry(
+		__field(void *, addr_referenced)
+		__field(u64, lower_bound)
+		__field(u64, upper_bound)
+	),
+
+	TP_fast_assign(
+		__entry->addr_referenced = addr_referenced;
+		__entry->lower_bound = bndreg->lower_bound;
+		__entry->upper_bound = bndreg->upper_bound;
+	),
+
+	TP_printk("address referenced: 0x%p bounds: lower: 0x%llx ~upper: 0x%llx",
+		__entry->addr_referenced,
+		__entry->lower_bound,
+		~__entry->upper_bound
+	)
+);
+
 TRACE_EVENT(bounds_exception_mpx,
 
 	TP_PROTO(struct bndcsr *bndcsr),
