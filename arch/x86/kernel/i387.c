@@ -133,8 +133,8 @@ void unlazy_fpu(struct task_struct *tsk)
 EXPORT_SYMBOL(unlazy_fpu);
 
 unsigned int mxcsr_feature_mask __read_mostly = 0xffffffffu;
-unsigned int xstate_size;
-EXPORT_SYMBOL_GPL(xstate_size);
+unsigned int kernel_xstate_size;
+EXPORT_SYMBOL_GPL(kernel_xstate_size);
 static struct i387_fxsave_struct fx_scratch;
 
 static void mxcsr_feature_mask_init(void)
@@ -154,7 +154,7 @@ static void mxcsr_feature_mask_init(void)
 static void init_thread_xstate(void)
 {
 	/*
-	 * Note that xstate_size might be overwriten later during
+	 * Note that kernel_xstate_size might be overwriten later during
 	 * xsave_init().
 	 */
 
@@ -165,17 +165,17 @@ static void init_thread_xstate(void)
 		 */
 		setup_clear_cpu_cap(X86_FEATURE_XSAVE);
 		setup_clear_cpu_cap(X86_FEATURE_XSAVEOPT);
-		xstate_size = sizeof(struct i387_soft_struct);
-		user_xstate_size = xstate_size;
+		kernel_xstate_size = sizeof(struct i387_soft_struct);
+		user_xstate_size = kernel_xstate_size;
 		return;
 	}
 
 	if (cpu_has_fxsr)
-		xstate_size = sizeof(struct i387_fxsave_struct);
+		kernel_xstate_size = sizeof(struct i387_fxsave_struct);
 	else
-		xstate_size = sizeof(struct i387_fsave_struct);
+		kernel_xstate_size = sizeof(struct i387_fsave_struct);
 
-	user_xstate_size = xstate_size;
+	user_xstate_size = kernel_xstate_size;
 }
 
 /*
@@ -211,9 +211,9 @@ void fpu_init(void)
 
 	/*
 	 * init_thread_xstate is only called once to avoid overriding
-	 * xstate_size during boot time or during CPU hotplug.
+	 * kernel_xstate_size during boot time or during CPU hotplug.
 	 */
-	if (xstate_size == 0)
+	if (kernel_xstate_size == 0)
 		init_thread_xstate();
 
 	mxcsr_feature_mask_init();
@@ -228,7 +228,7 @@ void fpu_finit(struct fpu *fpu)
 		return;
 	}
 
-	memset(fpu->state, 0, xstate_size);
+	memset(fpu->state, 0, kernel_xstate_size);
 
 	if (cpu_has_fxsr) {
 		fx_finit(&fpu->state->fxsave);

@@ -344,7 +344,7 @@ int __restore_xstate_sig(void __user *buf, void __user *buf_fx, int size)
 {
 	int ia32_fxstate = (buf != buf_fx);
 	struct task_struct *tsk = current;
-	int state_size = xstate_size;
+	int state_size = kernel_xstate_size;
 	u64 xstate_bv = 0;
 	int fx_only = 0;
 
@@ -544,7 +544,7 @@ static void __init setup_init_fpu_buf(void)
 	 * Setup init_xstate_buf to represent the init state of
 	 * all the features managed by the xsave
 	 */
-	init_xstate_buf = alloc_bootmem_align(xstate_size,
+	init_xstate_buf = alloc_bootmem_align(kernel_xstate_size,
 					      __alignof__(struct xsave_struct));
 	fx_finit(&init_xstate_buf->i387);
 
@@ -598,15 +598,15 @@ static void __init init_xstate_size(void)
 	user_xstate_size = ebx;
 
 	if (!cpu_has_xsaves) {
-		xstate_size = ebx;
+		kernel_xstate_size = ebx;
 		return;
 	}
 
-	xstate_size = FXSAVE_SIZE + XSAVE_HDR_SIZE;
+	kernel_xstate_size = FXSAVE_SIZE + XSAVE_HDR_SIZE;
 	for (i = 2; i < 64; i++) {
 		if (test_bit(i, (unsigned long *)&pcntxt_mask)) {
 			cpuid_count(XSTATE_CPUID, i, &eax, &ebx, &ecx, &edx);
-			xstate_size += eax;
+			kernel_xstate_size += eax;
 		}
 	}
 }
@@ -644,7 +644,7 @@ static void __init xstate_enable_boot_cpu(void)
 	 */
 	init_xstate_size();
 
-	update_regset_xstate_info(xstate_size, pcntxt_mask);
+	update_regset_xstate_info(kernel_xstate_size, pcntxt_mask);
 	prepare_fx_sw_frame();
 	setup_init_fpu_buf();
 
@@ -663,7 +663,7 @@ static void __init xstate_enable_boot_cpu(void)
 	}
 
 	pr_info("enabled xstate_bv 0x%llx, cntxt size 0x%x using %s\n",
-		pcntxt_mask, xstate_size,
+		pcntxt_mask, kernel_xstate_size,
 		cpu_has_xsaves ? "compacted form" : "standard form");
 }
 
