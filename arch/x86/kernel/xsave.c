@@ -706,19 +706,46 @@ void __init_refok eager_fpu_init(void)
  * This is the API that is called to get xstate address in either
  * standard format or compacted format of xsave area.
  *
+ * Note that if there is no data for the field in the xsave buffer
+ * this will return NULL.
+ *
  * Inputs:
- *	xsave: base address of the xsave area;
- *	xstate: state which is defined in xsave.h (e.g. XSTATE_FP, XSTATE_SSE,
- *	etc.)
+ *	xstate: the thread's storage area for all FPU data
+ *	xstate_field: state which is defined in xsave.h (e.g. XSTATE_FP,
+ *	XSTATE_SSE, etc...)
  * Output:
  *	address of the state in the xsave area.
  */
-void *get_xsave_addr(struct xsave_struct *xsave, int xstate)
+void *get_xsave_addr(struct xsave_struct *xsave, int xstate_field)
 {
-	int feature = fls64(xstate) - 1;
-	if (!test_bit(feature, (unsigned long *)&pcntxt_mask))
+	int feature_nr = fls64(xstate_field) - 1;
+	/*
+	 * Do we even *have* xsave state?
+	 */
+	if (!boot_cpu_has(X86_FEATURE_XSAVE))
 		return NULL;
 
-	return (void *)xsave + xstate_comp_offsets[feature];
+	xsave = &current->thread.fpu.state->xsave;
+	/*
+	 * We should not ever be requesting fields that we
+	 * have not enabled.  Remember that pcntxt_mask is
+	 * what we write to the XCR0 register.
+	 */
+	WARN_ONCE(!(pcntxt_mask & xstate_field), "get of unsupported state");
+	/*
+	 * This assumes the last 'xsave*' instruction to
+	 * have requested that 'xstate_field' be saved.
+	 * If it did not, we might be seeing and old value
+	 * of the field in the buffer.
+	 *
+	 * This can happen because the last 'xsave' did not
+	 * request that this feature be saved (unlikely)
+	 * or because the "init optimization" caused it
+	 * to not be saved.
+	 */
+	if (!(xsave->xsave_hdr.xstate_bv & xstate_field))
+		return NULL;
+
+	return (void *)xsave + xstate_comp_offsets[feature_nr];
 }
 EXPORT_SYMBOL_GPL(get_xsave_addr);
