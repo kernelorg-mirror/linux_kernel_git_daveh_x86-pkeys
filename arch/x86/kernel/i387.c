@@ -166,6 +166,7 @@ static void init_thread_xstate(void)
 		setup_clear_cpu_cap(X86_FEATURE_XSAVE);
 		setup_clear_cpu_cap(X86_FEATURE_XSAVEOPT);
 		xstate_size = sizeof(struct i387_soft_struct);
+		user_xstate_size = xstate_size;
 		return;
 	}
 
@@ -173,6 +174,8 @@ static void init_thread_xstate(void)
 		xstate_size = sizeof(struct i387_fxsave_struct);
 	else
 		xstate_size = sizeof(struct i387_fsave_struct);
+
+	user_xstate_size = xstate_size;
 }
 
 /*

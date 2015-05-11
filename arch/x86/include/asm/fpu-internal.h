@@ -496,7 +496,8 @@ extern int __restore_xstate_sig(void __user *buf, void __user *fx, int size);
 
 static inline int xstate_sigframe_size(void)
 {
-	return use_xsave() ? xstate_size + FP_XSTATE_MAGIC2_SIZE : xstate_size;
+	return use_xsave() ? user_xstate_size + FP_XSTATE_MAGIC2_SIZE :
+		user_xstate_size;
 }
 
 static inline int restore_xstate_sig(void __user *buf, int ia32_frame)

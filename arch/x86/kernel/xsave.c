@@ -29,6 +29,7 @@ static struct _fpx_sw_bytes fx_sw_reserved, fx_sw_reserved_ia32;
 static unsigned int *xstate_offsets, *xstate_sizes;
 static unsigned int xstate_comp_offsets[sizeof(pcntxt_mask)*8];
 static unsigned int xstate_features;
+unsigned int user_xstate_size;
 
 /*
  * If a processor implementation discern that a processor state component is
@@ -85,7 +86,7 @@ void __sanitize_i387_state(struct task_struct *tsk)
 	 */
 	while (xstate_bv) {
 		if (xstate_bv & 0x1) {
-			int offset = xstate_offsets[feature_bit];
+			int offset = xstate_comp_offsets[feature_bit];
 			int size = xstate_sizes[feature_bit];
 
 			memcpy(((void *) fx) + offset,
@@ -116,7 +117,7 @@ static inline int check_for_xstate(struct i387_fxsave_struct __user *buf,
 	/* Check for the first magic field and other error scenarios. */
 	if (fx_sw->magic1 != FP_XSTATE_MAGIC1 ||
 	    fx_sw->xstate_size < min_xstate_size ||
-	    fx_sw->xstate_size > xstate_size ||
+	    fx_sw->xstate_size > user_xstate_size ||
 	    fx_sw->xstate_size > fx_sw->extended_size)
 		return -1;
 
@@ -173,7 +174,8 @@ static inline int save_xstate_epilog(void __user *buf, int ia32_frame)
 	if (!use_xsave())
 		return err;
 
-	err |= __put_user(FP_XSTATE_MAGIC2, (__u32 *)(buf + xstate_size));
+	err |= __put_user(FP_XSTATE_MAGIC2,
+			  (__u32 *)(buf + user_xstate_size));
 
 	/*
 	 * Read the xstate_bv which we copied (directly from the cpu or
@@ -210,7 +212,7 @@ static inline int save_user_xstate(struct xsave_struct __user *buf)
 	else
 		err = fsave_user((struct i387_fsave_struct __user *) buf);
 
-	if (unlikely(err) && __clear_user(buf, xstate_size))
+	if (unlikely(err) && __clear_user(buf, user_xstate_size))
 		err = -EFAULT;
 	return err;
 }
@@ -260,8 +262,16 @@ int save_xstate_sig(void __user *buf, void __user *buf_fx, int size)
 		if (ia32_fxstate)
 			fpu_fxsave(&tsk->thread.fpu);
 	} else {
+		/*
+		 * When we come here, kernel uses standard format for
+		 * xsave area and xstate size should be the same for
+		 * both kernel and user space. Warn if it's not the
+		 * case.
+		 */
+		WARN_ONCE(user_xstate_size != kernel_xstate_size,
+			  "Wrong kernel xstate size!\n");
 		sanitize_i387_state(tsk);
-		if (__copy_to_user(buf_fx, xsave, xstate_size))
+		if (__copy_to_user(buf_fx, xsave, user_xstate_size))
 			return -1;
 	}
 
@@ -434,7 +444,7 @@ int __restore_xstate_sig(void __user *buf, void __user *buf_fx, int size)
 static void prepare_fx_sw_frame(void)
 {
 	int fsave_header_size = sizeof(struct i387_fsave_struct);
-	int size = xstate_size + FP_XSTATE_MAGIC2_SIZE;
+	int size = user_xstate_size + FP_XSTATE_MAGIC2_SIZE;
 
 	if (config_enabled(CONFIG_X86_32))
 		size += fsave_header_size;
@@ -442,7 +452,7 @@ static void prepare_fx_sw_frame(void)
 	fx_sw_reserved.magic1 = FP_XSTATE_MAGIC1;
 	fx_sw_reserved.extended_size = size;
 	fx_sw_reserved.xstate_bv = pcntxt_mask;
-	fx_sw_reserved.xstate_size = xstate_size;
+	fx_sw_reserved.xstate_size = user_xstate_size;
 
 	if (config_enabled(CONFIG_IA32_EMULATION)) {
 		fx_sw_reserved_ia32 = fx_sw_reserved;
@@ -576,14 +586,18 @@ __setup("eagerfpu=", eager_fpu_setup);
 
 /*
  * Calculate total size of enabled xstates in XCR0/pcntxt_mask.
+ *
+ * XCR0/pcntxt_mask should not be changed after this.
  */
 static void __init init_xstate_size(void)
 {
 	unsigned int eax, ebx, ecx, edx;
 	int i;
 
+	cpuid_count(XSTATE_CPUID, 0, &eax, &ebx, &ecx, &edx);
+	user_xstate_size = ebx;
+
 	if (!cpu_has_xsaves) {
-		cpuid_count(XSTATE_CPUID, 0, &eax, &ebx, &ecx, &edx);
 		xstate_size = ebx;
 		return;
 	}
