@@ -201,16 +201,16 @@ static inline int save_xstate_epilog(void __user *buf, int ia32_frame)
 	return err;
 }
 
-static inline int save_user_xstate(struct xsave_struct __user *buf)
+static inline int save_user_xstate(void __user *buf)
 {
 	int err;
 
 	if (use_xsave())
 		err = xsave_user(buf);
 	else if (use_fxsr())
-		err = fxsave_user((struct i387_fxsave_struct __user *) buf);
+		err = fxsave_user(buf);
 	else
-		err = fsave_user((struct i387_fsave_struct __user *) buf);
+		err = fsave_user(buf);
 
 	if (unlikely(err) && __clear_user(buf, user_xstate_size))
 		err = -EFAULT;
