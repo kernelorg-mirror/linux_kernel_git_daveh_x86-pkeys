@@ -61,6 +61,7 @@
 #include <asm/mach_traps.h>
 #include <asm/alternative.h>
 #include <asm/mpx.h>
+#include <asm/trace/mpx.h>
 #include <asm/xsave.h>
 
 #ifdef CONFIG_X86_64
@@ -400,6 +401,7 @@ dotraplinkage void do_bounds(struct pt_regs *regs, long error_code)
 	if (!bndcsr)
 		goto exit_trap;
 
+	trace_bounds_exception_mpx(bndcsr);
 	/*
 	 * The error code field of the BNDSTATUS register communicates status
 	 * information of a bound range exception #BR or operation involving
