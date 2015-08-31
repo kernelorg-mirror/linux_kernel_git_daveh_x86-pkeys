@@ -6,6 +6,23 @@
 #define MAP_HUGE_2MB    (21 << MAP_HUGE_SHIFT)
 #define MAP_HUGE_1GB    (30 << MAP_HUGE_SHIFT)
 
+/*
+ * Take the 4 protection key bits out of the vma->vm_flags
+ * value and turn them in to the bits that we can put in
+ * to a pte.
+ */
+#define arch_vm_get_page_prot(vm_flags)	__pgprot(	\
+		((vm_flags) & VM_PKEY_BIT0 ? _PAGE_PKEY_BIT0 : 0) |	\
+		((vm_flags) & VM_PKEY_BIT1 ? _PAGE_PKEY_BIT1 : 0) |	\
+		((vm_flags) & VM_PKEY_BIT2 ? _PAGE_PKEY_BIT2 : 0) |	\
+		((vm_flags) & VM_PKEY_BIT3 ? _PAGE_PKEY_BIT3 : 0))
+
+#define arch_calc_vm_prot_bits(prot) (	\
+		((prot) & PROT_PKEY0 ? VM_PKEY_BIT0 : 0) |	\
+		((prot) & PROT_PKEY1 ? VM_PKEY_BIT1 : 0) |	\
+		((prot) & PROT_PKEY2 ? VM_PKEY_BIT2 : 0) |	\
+		((prot) & PROT_PKEY3 ? VM_PKEY_BIT3 : 0))
+
 #include <asm-generic/mman.h>
 
 #ifndef arch_validate_prot
