@@ -558,7 +558,7 @@ static int __init twofish_init(void)
 {
 	const char *feature_name;
 
-	if (!cpu_has_xfeatures(XSTATE_SSE | XSTATE_YMM, &feature_name)) {
+	if (!cpu_has_xfeatures(XSTATE_SSE | XSTATE_YMM, NULL)) {
 		pr_info("CPU feature '%s' is not supported.\n", feature_name);
 		return -ENODEV;
 	}
