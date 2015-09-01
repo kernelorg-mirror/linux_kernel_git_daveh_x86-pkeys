@@ -372,7 +372,7 @@ dotraplinkage void do_double_fault(struct pt_regs *regs, long error_code)
 dotraplinkage void do_bounds(struct pt_regs *regs, long error_code)
 {
 	enum ctx_state prev_state;
-	const struct bndcsr *bndcsr;
+	const struct mpx_bndcsr *bndcsr;
 	siginfo_t *info;
 
 	prev_state = exception_enter();
