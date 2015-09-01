@@ -839,7 +839,10 @@ static noinline void
 bad_area_access_error(struct pt_regs *regs, unsigned long error_code,
 		      unsigned long address)
 {
-	__bad_area(regs, error_code, address, SEGV_ACCERR);
+	if (error_code & PF_PK)
+		__bad_area(regs, error_code, address, SEGV_PKUERR);
+	else
+		__bad_area(regs, error_code, address, SEGV_ACCERR);
 }
 
 static void
