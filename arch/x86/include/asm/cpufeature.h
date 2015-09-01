@@ -12,7 +12,7 @@
 #include <asm/disabled-features.h>
 #endif
 
-#define NCAPINTS	13	/* N 32-bit words worth of info */
+#define NCAPINTS	14	/* N 32-bit words worth of info */
 #define NBUGINTS	1	/* N 32-bit bug flags */
 
 /*
@@ -251,6 +251,10 @@
 
 /* Intel-defined CPU QoS Sub-leaf, CPUID level 0x0000000F:1 (edx), word 12 */
 #define X86_FEATURE_CQM_OCCUP_LLC (12*32+ 0) /* LLC occupancy monitoring if 1 */
+
+/* Intel-defined CPU features, CPUID level 0x00000007:0 (ecx), word 13 */
+#define X86_FEATURE_PKU		(13*32+ 3) /* Protection Keys for Userspace */
+#define X86_FEATURE_OSPKE	(13*32+ 4) /* OS Protection Keys Enable */
 
 /*
  * BUG word(s)
