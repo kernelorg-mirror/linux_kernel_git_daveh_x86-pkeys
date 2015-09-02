@@ -109,6 +109,7 @@ enum xfeature {
 	XFEATURE_ZMM_Hi256,
 	XFEATURE_Hi16_ZMM,
 	XFEATURE_PT_UNIMPLEMENTED_SO_FAR,
+	XFEATURE_PKRU,
 
 	XFEATURE_MAX,
 };
@@ -121,6 +122,7 @@ enum xfeature {
 #define XFEATURE_MASK_OPMASK		(1 << XFEATURE_OPMASK)
 #define XFEATURE_MASK_ZMM_Hi256		(1 << XFEATURE_ZMM_Hi256)
 #define XFEATURE_MASK_Hi16_ZMM		(1 << XFEATURE_Hi16_ZMM)
+#define XFEATURE_MASK_PKRU		(1 << XFEATURE_PKRU)
 
 #define XFEATURE_MASK_FPSSE		(XFEATURE_MASK_FP | XFEATURE_MASK_SSE)
 #define XFEATURE_MASK_AVX512		(XFEATURE_MASK_OPMASK \
@@ -211,6 +213,20 @@ struct avx_512_zmm_uppers_state {
  */
 struct avx_512_hi16_state {
 	struct reg_512_bit		hi16_zmm[16];
+} __packed;
+
+/*
+ * State component 9: 32-bit PKRU register.
+ */
+struct pkru {
+	u32 pkru;
+} __packed;
+
+struct pkru_state {
+	union {
+		struct pkru		pkru;
+		u8			pad_to_8_bytes[8];
+	};
 } __packed;
 
 struct xstate_header {
