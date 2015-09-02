@@ -154,6 +154,13 @@ extern unsigned int kobjsize(const void *objp);
 #define VM_NOHUGEPAGE	0x40000000	/* MADV_NOHUGEPAGE marked this vma */
 #define VM_MERGEABLE	0x80000000	/* KSM may merge identical pages */
 
+#ifdef CONFIG_ARCH_USES_HIGH_VMA_FLAGS
+#define VM_HIGH_ARCH_0  0x100000000UL	/* bit only usable on 64-bit architectures */
+#define VM_HIGH_ARCH_1  0x200000000UL	/* bit only usable on 64-bit architectures */
+#define VM_HIGH_ARCH_2  0x400000000UL	/* bit only usable on 64-bit architectures */
+#define VM_HIGH_ARCH_3  0x800000000UL	/* bit only usable on 64-bit architectures */
+#endif /* CONFIG_ARCH_USES_HIGH_VMA_FLAGS */
+
 #if defined(CONFIG_X86)
 # define VM_PAT		VM_ARCH_1	/* PAT reserves whole VMA at once (x86) */
 #elif defined(CONFIG_PPC)
