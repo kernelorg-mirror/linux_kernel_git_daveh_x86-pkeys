@@ -1038,6 +1038,15 @@ int show_unhandled_signals = 1;
 static inline int
 access_error(unsigned long error_code, struct vm_area_struct *vma)
 {
+	/*
+	 * Access or read was blocked by protection keys. We do
+	 * this check before any others because we do not want
+	 * to, for instance, confuse a protection-key-denied
+	 * write with one for which we should do a COW.
+	 */
+	if (error_code & PF_PK)
+		return 1;
+
 	if (error_code & PF_WRITE) {
 		/* write, present and write, not present: */
 		if (unlikely(!(vma->vm_flags & VM_WRITE)))
