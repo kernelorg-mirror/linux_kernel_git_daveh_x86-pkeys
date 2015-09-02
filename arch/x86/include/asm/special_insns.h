@@ -96,6 +96,29 @@ static inline void native_write_cr8(unsigned long val)
 {
 	asm volatile("movq %0,%%cr8" :: "r" (val) : "memory");
 }
+
+static inline u32 native_read_pkru(void)
+{
+        unsigned int eax, edx;
+        unsigned int ecx = 0;
+        unsigned int pkru;
+
+        asm volatile(".byte 0x0f,0x01,0xee\n\t"
+                     : "=a" (eax), "=d" (edx)
+                     : "c" (ecx));
+        pkru = eax;
+        return pkru;
+}
+
+static inline void native_write_pkru(unsigned int pkru)
+{
+        unsigned int eax = pkru;
+        unsigned int ecx = 0;
+        unsigned int edx = 0;
+
+        asm volatile(".byte 0x0f,0x01,0xef\n\t"
+                     : : "a" (eax), "c" (ecx), "d" (edx));
+}
 #endif
 
 static inline void native_wbinvd(void)
@@ -176,6 +199,15 @@ static inline void load_gs_index(unsigned selector)
 	native_load_gs_index(selector);
 }
 
+static inline u32 read_pkru(void)
+{
+        return native_read_pkru();
+}
+
+static inline void write_pkru(unsigned int pkru)
+{
+	native_write_pkru(pkru);
+}
 #endif
 
 /* Clear the 'TS' bit */
