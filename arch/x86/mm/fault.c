@@ -15,6 +15,7 @@
 #include <linux/context_tracking.h>	/* exception_enter(), ...	*/
 #include <linux/uaccess.h>		/* faulthandler_disabled()	*/
 
+#include <asm/cpufeature.h>		/* boot_cpu_has, ...		*/
 #include <asm/traps.h>			/* dotraplinkage, ...		*/
 #include <asm/pgalloc.h>		/* pgd_*(), ...			*/
 #include <asm/kmemcheck.h>		/* kmemcheck_*(), ...		*/
@@ -168,6 +169,30 @@ is_prefetch(struct pt_regs *regs, unsigned long error_code, unsigned long addr)
 	return prefetch;
 }
 
+static u32 fetch_pte_pkey(unsigned long address, struct task_struct *tsk)
+{
+	spinlock_t *ptl;
+	pte_t *ptep;
+	pte_t pte;
+	int follow_ret;
+
+	if (!boot_cpu_has(X86_FEATURE_OSPKE))
+		return 0;
+
+	follow_ret = follow_pte(tsk->mm, address, &ptep, &ptl);
+	/*
+	 * On any problem assume there is no PTE
+	 * and that it is the default, 0.
+	 */
+	if (follow_ret)
+		return 0;
+
+	pte = *ptep;
+	pte_unmap_unlock(ptep, ptl);
+
+	return pte_pkey(pte);
+}
+
 static void
 force_sig_info_fault(int si_signo, int si_code, unsigned long address,
 		     struct task_struct *tsk, int fault)
@@ -184,6 +209,9 @@ force_sig_info_fault(int si_signo, int si_code, unsigned long address,
 	if (fault & VM_FAULT_HWPOISON)
 		lsb = PAGE_SHIFT;
 	info.si_addr_lsb = lsb;
+
+	if (si_code == SEGV_PKUERR)
+		info.si_pkey = fetch_pte_pkey(address, tsk);
 
 	force_sig_info(si_signo, &info, tsk);
 }
@@ -839,7 +867,10 @@ static noinline void
 bad_area_access_error(struct pt_regs *regs, unsigned long error_code,
 		      unsigned long address)
 {
-	__bad_area(regs, error_code, address, SEGV_ACCERR);
+	if (error_code & PF_PK)
+		__bad_area(regs, error_code, address, SEGV_PKUERR);
+	else
+		__bad_area(regs, error_code, address, SEGV_ACCERR);
 }
 
 static void

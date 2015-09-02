@@ -881,6 +881,11 @@ static inline pte_t pte_swp_clear_soft_dirty(pte_t pte)
 }
 #endif
 
+static inline u32 pte_pkey(pte_t pte)
+{
+	return (pte_flags(pte) & _PAGE_PKEY_MASK) >> _PAGE_BIT_PKEY_BIT0;
+}
+
 #include <asm-generic/pgtable.h>
 #endif	/* __ASSEMBLY__ */
 
