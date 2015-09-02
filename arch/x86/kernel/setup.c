@@ -1289,3 +1289,20 @@ static int __init register_kernel_offset_dumper(void)
 	return 0;
 }
 __initcall(register_kernel_offset_dumper);
+
+void arch_show_smap(struct seq_file *m, struct vm_area_struct *vma)
+{
+	u32 pkey = 0;
+	unsigned long f = vma->vm_flags;
+
+	if (!boot_cpu_has(X86_FEATURE_OSPKE))
+		return;
+
+	pkey |= (f & VM_HIGH_ARCH_0) << 0;
+	pkey |= (f & VM_HIGH_ARCH_1) << 1;
+	pkey |= (f & VM_HIGH_ARCH_2) << 2;
+	pkey |= (f & VM_HIGH_ARCH_3) << 3;
+
+	seq_printf(m, "ProtectionKey:  %08u\n", pkey);
+}
+
