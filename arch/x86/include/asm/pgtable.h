@@ -446,6 +446,11 @@ static inline int pte_present(pte_t a)
 	return pte_flags(a) & (_PAGE_PRESENT | _PAGE_PROTNONE);
 }
 
+static inline int pte_user(pte_t a)
+{
+	return pte_flags(a) & _PAGE_USER;
+}
+
 #define pte_accessible pte_accessible
 static inline bool pte_accessible(struct mm_struct *mm, pte_t a)
 {

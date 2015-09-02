@@ -63,6 +63,17 @@ retry:
 #endif
 }
 
+static inline int pte_allows_gup(pte_t pte, int write)
+{
+	if (!pte_present(pte))
+		return 0;
+	if (!pte_user(pte))
+		return 0;
+	if (write && !pte_write(pte))
+		return 0;
+	return 1;
+}
+
 /*
  * The performance critical leaf functions are made noinline otherwise gcc
  * inlines everything into a single function which results in too much
@@ -71,12 +82,7 @@ retry:
 static noinline int gup_pte_range(pmd_t pmd, unsigned long addr,
 		unsigned long end, int write, struct page **pages, int *nr)
 {
-	unsigned long mask;
 	pte_t *ptep;
-
-	mask = _PAGE_PRESENT|_PAGE_USER;
-	if (write)
-		mask |= _PAGE_RW;
 
 	ptep = pte_offset_map(&pmd, addr);
 	do {
@@ -89,7 +95,7 @@ static noinline int gup_pte_range(pmd_t pmd, unsigned long addr,
 			return 0;
 		}
 
-		if ((pte_flags(pte) & (mask | _PAGE_SPECIAL)) != mask) {
+		if (pte_special(pte)) {
 			pte_unmap(ptep);
 			return 0;
 		}
@@ -194,15 +200,11 @@ static int gup_pmd_range(pud_t pud, unsigned long addr, unsigned long end,
 static noinline int gup_huge_pud(pud_t pud, unsigned long addr,
 		unsigned long end, int write, struct page **pages, int *nr)
 {
-	unsigned long mask;
 	pte_t pte = *(pte_t *)&pud;
 	struct page *head, *page;
 	int refs;
 
-	mask = _PAGE_PRESENT|_PAGE_USER;
-	if (write)
-		mask |= _PAGE_RW;
-	if ((pte_flags(pte) & mask) != mask)
+	if (!pte_allows_gup(pte, write))
 		return 0;
 	/* hugepages are never "special" */
 	VM_BUG_ON(pte_flags(pte) & _PAGE_SPECIAL);
