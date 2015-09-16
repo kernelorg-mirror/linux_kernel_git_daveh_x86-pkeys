@@ -351,7 +351,8 @@ out:
 	return ret;
 }
 
-static inline vm_flags_t calc_vm_may_flags(unsigned long prot)
+static inline vm_flags_t calc_vm_may_flags(unsigned long prot,
+		unsigned long pkey)
 {
 	return _calc_vm_trans(prot, PROT_READ,  VM_MAYREAD) |
 	       _calc_vm_trans(prot, PROT_WRITE, VM_MAYWRITE) |
