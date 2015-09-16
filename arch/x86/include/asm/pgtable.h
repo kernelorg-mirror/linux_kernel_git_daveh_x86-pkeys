@@ -881,6 +881,21 @@ static inline pte_t pte_swp_clear_soft_dirty(pte_t pte)
 }
 #endif
 
+
+static inline u32 read_pkru(void)
+{
+	if (boot_cpu_has(X86_FEATURE_OSPKE))
+		return __read_pkru();
+	return 0;
+}
+static inline void write_pkru(u32 pkru)
+{
+	if (boot_cpu_has(X86_FEATURE_OSPKE))
+		__write_pkru(pkru);
+	else
+		VM_WARN_ON_ONCE(pkru);
+}
+
 static inline u32 pte_pkey(pte_t pte)
 {
 #ifdef CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS
