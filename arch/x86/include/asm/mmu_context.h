@@ -243,4 +243,19 @@ static inline void arch_unmap(struct mm_struct *mm, struct vm_area_struct *vma,
 		mpx_notify_unmap(mm, vma, start, end);
 }
 
+static inline u16 vma_pkey(struct vm_area_struct *vma)
+{
+	u16 pkey = 0;
+#ifdef CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS
+	unsigned long f = vma->vm_flags;
+	pkey |= (!!(f & VM_HIGH_ARCH_0)) << 0;
+	pkey |= (!!(f & VM_HIGH_ARCH_1)) << 1;
+	pkey |= (!!(f & VM_HIGH_ARCH_2)) << 2;
+	pkey |= (!!(f & VM_HIGH_ARCH_3)) << 3;
+#endif
+
+	return pkey;
+}
+
+
 #endif /* _ASM_X86_MMU_CONTEXT_H */
