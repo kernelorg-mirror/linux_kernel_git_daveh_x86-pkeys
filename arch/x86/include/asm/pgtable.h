@@ -881,6 +881,16 @@ static inline pte_t pte_swp_clear_soft_dirty(pte_t pte)
 }
 #endif
 
+static inline u32 pte_pkey(pte_t pte)
+{
+#ifdef CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS
+	/* ifdef to avoid doing 59-bit shift on 32-bit values */
+	return (pte_flags(pte) & _PAGE_PKEY_MASK) >> _PAGE_BIT_PKEY_BIT0;
+#else
+	return 0;
+#endif
+}
+
 #include <asm-generic/pgtable.h>
 #endif	/* __ASSEMBLY__ */
 
