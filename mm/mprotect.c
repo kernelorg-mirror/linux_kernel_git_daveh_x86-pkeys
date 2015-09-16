@@ -344,8 +344,8 @@ fail:
 	return error;
 }
 
-SYSCALL_DEFINE3(mprotect, unsigned long, start, size_t, len,
-		unsigned long, prot)
+static int do_mprotect_key(unsigned long start, size_t len,
+		unsigned long prot, unsigned long key)
 {
 	unsigned long vm_flags, nstart, end, tmp, reqprot;
 	struct vm_area_struct *vma, *prev;
@@ -365,6 +365,8 @@ SYSCALL_DEFINE3(mprotect, unsigned long, start, size_t, len,
 		return -ENOMEM;
 	if (!arch_validate_prot(prot))
 		return -EINVAL;
+	if (key >= CONFIG_NR_PROTECTION_KEYS)
+		return -EINVAL;
 
 	reqprot = prot;
 	/*
@@ -373,7 +375,7 @@ SYSCALL_DEFINE3(mprotect, unsigned long, start, size_t, len,
 	if ((prot & PROT_READ) && (current->personality & READ_IMPLIES_EXEC))
 		prot |= PROT_EXEC;
 
-	vm_flags = calc_vm_prot_bits(prot, 0);
+	vm_flags = calc_vm_prot_bits(prot, key);
 
 	down_write(&current->mm->mmap_sem);
 
@@ -442,4 +444,16 @@ SYSCALL_DEFINE3(mprotect, unsigned long, start, size_t, len,
 out:
 	up_write(&current->mm->mmap_sem);
 	return error;
+}
+
+SYSCALL_DEFINE3(mprotect, unsigned long, start, size_t, len,
+		unsigned long, prot)
+{
+	return do_mprotect_key(start, len, prot, 0);
+}
+
+SYSCALL_DEFINE4(mprotect_key, unsigned long, start, size_t, len,
+		unsigned long, prot, unsigned long, key)
+{
+	return do_mprotect_key(start, len, prot, key);
 }
