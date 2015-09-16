@@ -6,6 +6,8 @@
 #define MAP_HUGE_2MB    (21 << MAP_HUGE_SHIFT)
 #define MAP_HUGE_1GB    (30 << MAP_HUGE_SHIFT)
 
+#include <asm-generic/mman.h>
+
 #ifdef CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS
 /*
  * Take the 4 protection key bits out of the vma->vm_flags
@@ -26,8 +28,20 @@
 		((prot) & PROT_PKEY1 ? VM_PKEY_BIT1 : 0) |	\
 		((prot) & PROT_PKEY2 ? VM_PKEY_BIT2 : 0) |	\
 		((prot) & PROT_PKEY3 ? VM_PKEY_BIT3 : 0))
-#endif
 
-#include <asm-generic/mman.h>
+#ifndef arch_validate_prot
+/*
+ * This is called from mprotect().  PROT_GROWSDOWN and PROT_GROWSUP have
+ * already been masked out.
+ *
+ * Returns true if the prot flags are valid
+ */
+#define arch_validate_prot(prot) (\
+	(prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC | PROT_SEM |	\
+	 PROT_PKEY0 | PROT_PKEY1 | PROT_PKEY2 | PROT_PKEY3)) == 0)	\
+
+#endif /* arch_validate_prot */
+
+#endif /* CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS */
 
 #endif /* _ASM_X86_MMAN_H */
