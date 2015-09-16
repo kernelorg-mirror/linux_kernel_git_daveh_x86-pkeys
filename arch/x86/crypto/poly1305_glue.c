@@ -16,6 +16,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <asm/fpu/api.h>
+#include <asm/feature-checks.h>
 #include <asm/simd.h>
 
 struct poly1305_simd_desc_ctx {
@@ -183,8 +184,7 @@ static int __init poly1305_simd_mod_init(void)
 		return -ENODEV;
 
 #ifdef CONFIG_AS_AVX2
-	poly1305_use_avx2 = cpu_has_avx && cpu_has_avx2 &&
-			    cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM, NULL);
+	poly1305_use_avx2 = avx2_usable();
 	alg.descsize = sizeof(struct poly1305_simd_desc_ctx);
 	if (poly1305_use_avx2)
 		alg.descsize += 10 * sizeof(u32);
