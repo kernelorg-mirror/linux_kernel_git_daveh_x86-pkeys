@@ -344,6 +344,15 @@ fail:
 	return error;
 }
 
+static unsigned long vm_flags_unaffected_by_mprotect(unsigned long vm_flags)
+{
+	unsigned long mask_off = VM_READ | VM_WRITE | VM_EXEC;
+#ifdef CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS
+	mask_off |= VM_PKEY_BIT0 | VM_PKEY_BIT1 | VM_PKEY_BIT2 | VM_PKEY_BIT3;
+#endif
+	return vm_flags & ~mask_off;
+}
+
 SYSCALL_DEFINE3(mprotect, unsigned long, start, size_t, len,
 		unsigned long, prot)
 {
@@ -407,8 +416,10 @@ SYSCALL_DEFINE3(mprotect, unsigned long, start, size_t, len,
 
 		/* Here we know that vma->vm_start <= nstart < vma->vm_end. */
 
+		/* Set the vm_flags from the PROT_* bits passed to mprotect */
 		newflags = vm_flags;
-		newflags |= (vma->vm_flags & ~(VM_READ | VM_WRITE | VM_EXEC));
+		/* Copy over all other VMA flags unaffected by mprotect */
+		newflags |= vm_flags_unaffected_by_mprotect(vma->vm_flags);
 
 		/* newflags >> 4 shift VM_MAY% in place of VM_% */
 		if ((newflags & ~(newflags >> 4)) & (VM_READ | VM_WRITE | VM_EXEC)) {
