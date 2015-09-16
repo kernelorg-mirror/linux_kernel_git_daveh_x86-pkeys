@@ -20,6 +20,12 @@
 		((vm_flags) & VM_PKEY_BIT1 ? _PAGE_PKEY_BIT1 : 0) |	\
 		((vm_flags) & VM_PKEY_BIT2 ? _PAGE_PKEY_BIT2 : 0) |	\
 		((vm_flags) & VM_PKEY_BIT3 ? _PAGE_PKEY_BIT3 : 0))
+
+#define arch_calc_vm_prot_bits(prot) (	\
+		((prot) & PROT_PKEY0 ? VM_PKEY_BIT0 : 0) |	\
+		((prot) & PROT_PKEY1 ? VM_PKEY_BIT1 : 0) |	\
+		((prot) & PROT_PKEY2 ? VM_PKEY_BIT2 : 0) |	\
+		((prot) & PROT_PKEY3 ? VM_PKEY_BIT3 : 0))
 #endif
 
 #include <asm-generic/mman.h>
