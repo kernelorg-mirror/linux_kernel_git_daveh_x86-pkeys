@@ -15,6 +15,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <asm/fpu/api.h>
+#include <asm/feature-checks.h>
 #include <asm/simd.h>
 
 #define CHACHA20_STATE_ALIGN 16
@@ -129,8 +130,7 @@ static int __init chacha20_simd_mod_init(void)
 		return -ENODEV;
 
 #ifdef CONFIG_AS_AVX2
-	chacha20_use_avx2 = cpu_has_avx && cpu_has_avx2 &&
-			    cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM, NULL);
+	chacha20_use_avx2 = avx2_usable();
 #endif
 	return crypto_register_alg(&alg);
 }
