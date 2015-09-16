@@ -59,7 +59,7 @@ static void intel_lpss_pci_remove(struct pci_dev *pdev)
 	intel_lpss_remove(&pdev->dev);
 }
 
-static INTEL_LPSS_PM_OPS(intel_lpss_pci_pm_ops);
+//static INTEL_LPSS_PM_OPS(intel_lpss_pci_pm_ops);
 
 static const struct intel_lpss_platform_info spt_info = {
 	.clk_rate = 120000000,
@@ -101,7 +101,7 @@ static struct pci_driver intel_lpss_pci_driver = {
 	.probe = intel_lpss_pci_probe,
 	.remove = intel_lpss_pci_remove,
 	.driver = {
-		.pm = &intel_lpss_pci_pm_ops,
+//		.pm = &intel_lpss_pci_pm_ops,
 	},
 };
 
