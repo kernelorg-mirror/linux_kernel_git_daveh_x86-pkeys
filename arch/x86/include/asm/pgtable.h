@@ -906,6 +906,18 @@ static inline u32 pte_pkey(pte_t pte)
 #endif
 }
 
+static inline bool __pkru_allows_read(u32 pkru, u16 pkey)
+{
+	int pkru_access_disable_bit = pkey * 2;
+	return !(pkru & (1 << pkru_access_disable_bit));
+}
+
+static inline bool __pkru_allows_write(u32 pkru, u16 pkey)
+{
+	int pkru_write_disable_bit = pkey * 2 + 1;
+	return !(pkru & (1 << pkru_write_disable_bit));
+}
+
 #include <asm-generic/pgtable.h>
 #endif	/* __ASSEMBLY__ */
 
