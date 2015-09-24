@@ -111,10 +111,22 @@ static inline u32 __read_pkru(void)
         pkru = eax;
         return pkru;
 }
+static inline void __write_pkru(u32 pkru)
+{
+        unsigned int eax = pkru;
+        unsigned int ecx = 0;
+        unsigned int edx = 0;
+
+        asm volatile(".byte 0x0f,0x01,0xef\n\t"
+                     : : "a" (eax), "c" (ecx), "d" (edx));
+}
 #else
 static inline u32 __read_pkru(void)
 {
 	return 0;
+}
+static inline void __write_pkru(u32 pkru)
+{
 }
 #endif
 
