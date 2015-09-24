@@ -15,12 +15,14 @@
 #include <linux/context_tracking.h>	/* exception_enter(), ...	*/
 #include <linux/uaccess.h>		/* faulthandler_disabled()	*/
 
+#include <asm/cpufeature.h>		/* boot_cpu_has, ...		*/
 #include <asm/traps.h>			/* dotraplinkage, ...		*/
 #include <asm/pgalloc.h>		/* pgd_*(), ...			*/
 #include <asm/kmemcheck.h>		/* kmemcheck_*(), ...		*/
 #include <asm/fixmap.h>			/* VSYSCALL_ADDR		*/
 #include <asm/vsyscall.h>		/* emulate_vsyscall		*/
 #include <asm/vm86.h>			/* struct vm86			*/
+#include <asm/mmu_context.h>		/* vma_pkey()			*/
 
 #define CREATE_TRACE_POINTS
 #include <asm/trace/exceptions.h>
@@ -169,6 +171,45 @@ is_prefetch(struct pt_regs *regs, unsigned long error_code, unsigned long addr)
 	return prefetch;
 }
 
+static u16 fetch_pkey(unsigned long address, struct task_struct *tsk)
+{
+	u16 ret;
+	spinlock_t *ptl;
+	pte_t *ptep;
+	pte_t pte;
+	int follow_ret;
+
+	if (!boot_cpu_has(X86_FEATURE_OSPKE))
+		return 0;
+
+	follow_ret = follow_pte(tsk->mm, address, &ptep, &ptl);
+	if (!follow_ret) {
+		/*
+		 * On a successful follow, make sure to
+		 * drop the lock.
+		 */
+		pte = *ptep;
+		pte_unmap_unlock(ptep, ptl);
+		ret = pte_pkey(pte);
+	} else {
+		/*
+		 * There is no PTE.  Go looking for the pkey in
+		 * the VMA.  If we did not find a pkey violation
+		 * from either the PTE or the VMA, then it must
+		 * have been a fault from the hardware.  Perhaps
+		 * the PTE got zapped before we got in here.
+		 */
+		struct vm_area_struct *vma = find_vma(tsk->mm, address);
+		if (vma) {
+			ret = vma_pkey(vma);
+		} else {
+			WARN_ONCE(1, "no PTE or VMA @ %lx\n", address);
+			ret = 0;
+		}
+	}
+	return ret;
+}
+
 static void
 force_sig_info_fault(int si_signo, int si_code, unsigned long address,
 		     struct task_struct *tsk, int fault)
@@ -185,6 +226,16 @@ force_sig_info_fault(int si_signo, int si_code, unsigned long address,
 	if (fault & VM_FAULT_HWPOISON)
 		lsb = PAGE_SHIFT;
 	info.si_addr_lsb = lsb;
+
+	/*
+	 * A protection key fault means that the PKRU value did
+	 * not allow access to some PTE.  Userspace can figure
+	 * out what PKRU was from the XSAVE state, and this gives
+	 * it a way to discover which protection key was set on
+	 * the PTE.
+	 */
+	if (boot_cpu_has(X86_FEATURE_OSPKE) && si_code == SEGV_PKUERR)
+		info.si_pkey = fetch_pkey(address, tsk);
 
 	force_sig_info(si_signo, &info, tsk);
 }
@@ -842,7 +893,10 @@ static noinline void
 bad_area_access_error(struct pt_regs *regs, unsigned long error_code,
 		      unsigned long address)
 {
-	__bad_area(regs, error_code, address, SEGV_ACCERR);
+	if (boot_cpu_has(X86_FEATURE_OSPKE) && (error_code & PF_PK))
+		__bad_area(regs, error_code, address, SEGV_PKUERR);
+	else
+		__bad_area(regs, error_code, address, SEGV_ACCERR);
 }
 
 static void
