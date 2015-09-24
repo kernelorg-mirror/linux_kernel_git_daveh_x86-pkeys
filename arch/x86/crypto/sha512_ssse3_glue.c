@@ -36,6 +36,7 @@
 #include <crypto/sha.h>
 #include <crypto/sha512_base.h>
 #include <asm/fpu/api.h>
+#include <asm/feature-checks.h>
 
 #include <linux/string.h>
 
@@ -125,19 +126,6 @@ static struct shash_alg algs[] = { {
 		.cra_module	=	THIS_MODULE,
 	}
 } };
-
-#ifdef CONFIG_AS_AVX
-static bool __init avx_usable(void)
-{
-	if (!cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM, NULL)) {
-		if (cpu_has_avx)
-			pr_info("AVX detected but unusable.\n");
-		return false;
-	}
-
-	return true;
-}
-#endif
 
 static int __init sha512_ssse3_mod_init(void)
 {
