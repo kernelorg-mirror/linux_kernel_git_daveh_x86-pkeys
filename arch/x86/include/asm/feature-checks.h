@@ -2,7 +2,9 @@
 #define _ASM_X86_FEATURE_CHECKS_H
 
 /*
- *
+ * Common checkers to ensure that we have both the
+ * CPU support and the XSAVE support in place to
+ * run various features.
  */
 
 static inline bool __init sse2_usable(void)
