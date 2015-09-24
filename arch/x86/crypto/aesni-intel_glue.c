@@ -33,6 +33,7 @@
 #include <crypto/xts.h>
 #include <asm/cpu_device_id.h>
 #include <asm/fpu/api.h>
+#include <asm/feature-checks.h>
 #include <asm/crypto/aes.h>
 #include <crypto/ablk_helper.h>
 #include <crypto/scatterwalk.h>
@@ -1447,42 +1448,37 @@ static struct aead_alg aesni_aead_algs[] = { {
 static struct aead_alg aesni_aead_algs[0];
 #endif
 
-
-static const struct x86_cpu_id aesni_cpu_id[] = {
-	X86_FEATURE_MATCH(X86_FEATURE_AES),
-	{}
-};
-MODULE_DEVICE_TABLE(x86cpu, aesni_cpu_id);
-
 static int __init aesni_init(void)
 {
 	int err;
 
-	if (!x86_match_cpu(aesni_cpu_id))
+	if (!boot_cpu_has(X86_FEATURE_AES))
 		return -ENODEV;
 #ifdef CONFIG_X86_64
 #ifdef CONFIG_AS_AVX2
-	if (boot_cpu_has(X86_FEATURE_AVX2)) {
+	if (avx2_usable()) {
 		pr_info("AVX2 version of gcm_enc/dec engaged.\n");
 		aesni_gcm_enc_tfm = aesni_gcm_enc_avx2;
 		aesni_gcm_dec_tfm = aesni_gcm_dec_avx2;
 	} else
 #endif
 #ifdef CONFIG_AS_AVX
-	if (boot_cpu_has(X86_FEATURE_AVX)) {
+	if (avx_usable()) {
 		pr_info("AVX version of gcm_enc/dec engaged.\n");
 		aesni_gcm_enc_tfm = aesni_gcm_enc_avx;
 		aesni_gcm_dec_tfm = aesni_gcm_dec_avx;
 	} else
 #endif
-	{
+	if (sse2_usable()) {
 		pr_info("SSE version of gcm_enc/dec engaged.\n");
 		aesni_gcm_enc_tfm = aesni_gcm_enc;
 		aesni_gcm_dec_tfm = aesni_gcm_dec;
+	} else {
+		return -ENODEV;
 	}
 	aesni_ctr_enc_tfm = aesni_ctr_enc;
 #ifdef CONFIG_AS_AVX
-	if (cpu_has_avx) {
+	if (avx_usable()) {
 		/* optimize performance of ctr mode encryption transform */
 		aesni_ctr_enc_tfm = aesni_ctr_enc_avx_tfm;
 		pr_info("AES CTR mode by8 optimization enabled\n");
