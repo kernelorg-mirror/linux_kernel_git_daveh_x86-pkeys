@@ -20,6 +20,7 @@
 #include <crypto/lrw.h>
 #include <crypto/xts.h>
 #include <asm/fpu/api.h>
+#include <asm/feature-checks.h>
 #include <asm/crypto/camellia.h>
 #include <asm/crypto/glue_helper.h>
 
@@ -552,11 +553,8 @@ static struct crypto_alg cmll_algs[10] = { {
 
 static int __init camellia_aesni_init(void)
 {
-	const char *feature_name;
-
-	if (!cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM,
-				&feature_name)) {
-		pr_info("CPU feature '%s' is not supported.\n", feature_name);
+	if (!avx_usable() || !cpu_has_aes) {
+		pr_info("AVX2 or AESNI instructions are unsupported.\n");
 		return -ENODEV;
 	}
 
