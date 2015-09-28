@@ -32,6 +32,7 @@
 #include <crypto/cryptd.h>
 #include <crypto/ctr.h>
 #include <asm/fpu/api.h>
+#include <asm/feature-checks.h>
 #include <asm/crypto/glue_helper.h>
 
 #define CAST5_PARALLEL_BLOCKS 16
@@ -467,11 +468,8 @@ static struct crypto_alg cast5_algs[6] = { {
 
 static int __init cast5_init(void)
 {
-	const char *feature_name;
-
-	if (!cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM,
-				&feature_name)) {
-		pr_info("CPU feature '%s' is not supported.\n", feature_name);
+	if (!avx_usable()) {
+		pr_info("AVX instructions are unsupported.\n");
 		return -ENODEV;
 	}
 
