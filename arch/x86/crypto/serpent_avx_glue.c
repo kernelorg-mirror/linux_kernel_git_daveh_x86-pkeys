@@ -37,6 +37,7 @@
 #include <crypto/lrw.h>
 #include <crypto/xts.h>
 #include <asm/fpu/api.h>
+#include <asm/feature-checks.h>
 #include <asm/crypto/serpent-avx.h>
 #include <asm/crypto/glue_helper.h>
 
@@ -595,11 +596,8 @@ static struct crypto_alg serpent_algs[10] = { {
 
 static int __init serpent_init(void)
 {
-	const char *feature_name;
-
-	if (!cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM,
-				&feature_name)) {
-		pr_info("CPU feature '%s' is not supported.\n", feature_name);
+	if (!avx_usable()) {
+		pr_info("AVX instructions are not supported.\n");
 		return -ENODEV;
 	}
 
