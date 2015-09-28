@@ -889,6 +889,14 @@ static inline u32 read_pkru(void)
 	return 0;
 }
 
+static inline void write_pkru(u32 pkru)
+{
+	if (boot_cpu_has(X86_FEATURE_OSPKE))
+		__write_pkru(pkru);
+	else
+		VM_WARN_ON_ONCE(pkru);
+}
+
 static inline u32 pte_pkey(pte_t pte)
 {
 #ifdef CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS
