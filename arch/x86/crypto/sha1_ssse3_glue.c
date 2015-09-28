@@ -30,6 +30,7 @@
 #include <crypto/sha.h>
 #include <crypto/sha1_base.h>
 #include <asm/fpu/api.h>
+#include <asm/feature-checks.h>
 
 
 asmlinkage void sha1_transform_ssse3(u32 *digest, const char *data,
@@ -118,30 +119,6 @@ static struct shash_alg alg = {
 	}
 };
 
-#ifdef CONFIG_AS_AVX
-static bool __init avx_usable(void)
-{
-	if (!cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM, NULL)) {
-		if (cpu_has_avx)
-			pr_info("AVX detected but unusable.\n");
-		return false;
-	}
-
-	return true;
-}
-
-#ifdef CONFIG_AS_AVX2
-static bool __init avx2_usable(void)
-{
-	if (avx_usable() && cpu_has_avx2 && boot_cpu_has(X86_FEATURE_BMI1) &&
-	    boot_cpu_has(X86_FEATURE_BMI2))
-		return true;
-
-	return false;
-}
-#endif
-#endif
-
 static int __init sha1_ssse3_mod_init(void)
 {
 	char *algo_name;
@@ -159,7 +136,9 @@ static int __init sha1_ssse3_mod_init(void)
 		algo_name = "AVX";
 #ifdef CONFIG_AS_AVX2
 		/* allow AVX2 to override AVX, it's a little faster */
-		if (avx2_usable()) {
+		if (avx2_usable() &&
+		    boot_cpu_has(X86_FEATURE_BMI1) &&
+		    boot_cpu_has(X86_FEATURE_BMI2)) {
 			sha1_transform_asm = sha1_apply_transform_avx2;
 			algo_name = "AVX2";
 		}
