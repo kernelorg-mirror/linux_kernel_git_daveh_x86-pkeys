@@ -38,6 +38,7 @@
 #include <crypto/sha.h>
 #include <crypto/sha256_base.h>
 #include <asm/fpu/api.h>
+#include <asm/feature-checks.h>
 #include <linux/string.h>
 
 asmlinkage void sha256_transform_ssse3(u32 *digest, const char *data,
@@ -127,19 +128,6 @@ static struct shash_alg algs[] = { {
 	}
 } };
 
-#ifdef CONFIG_AS_AVX
-static bool __init avx_usable(void)
-{
-	if (!cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM, NULL)) {
-		if (cpu_has_avx)
-			pr_info("AVX detected but unusable.\n");
-		return false;
-	}
-
-	return true;
-}
-#endif
-
 static int __init sha256_ssse3_mod_init(void)
 {
 	/* test for SSSE3 first */
@@ -148,14 +136,12 @@ static int __init sha256_ssse3_mod_init(void)
 
 #ifdef CONFIG_AS_AVX
 	/* allow AVX to override SSSE3, it's a little faster */
-	if (avx_usable()) {
-#ifdef CONFIG_AS_AVX2
-		if (boot_cpu_has(X86_FEATURE_AVX2) && boot_cpu_has(X86_FEATURE_BMI2))
-			sha256_transform_asm = sha256_transform_rorx;
-		else
+	if (avx_usable())
+		sha256_transform_asm = sha256_transform_avx;
 #endif
-			sha256_transform_asm = sha256_transform_avx;
-	}
+#ifdef CONFIG_AS_AVX2
+	if (avx2_usable() && boot_cpu_has(X86_FEATURE_BMI2))
+		sha256_transform_asm = sha256_transform_rorx;
 #endif
 
 	if (sha256_transform_asm) {
