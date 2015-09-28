@@ -21,6 +21,7 @@
 #include <crypto/xts.h>
 #include <crypto/serpent.h>
 #include <asm/fpu/api.h>
+#include <asm/feature-checks.h>
 #include <asm/crypto/serpent-avx.h>
 #include <asm/crypto/glue_helper.h>
 
@@ -536,15 +537,8 @@ static struct crypto_alg srp_algs[10] = { {
 
 static int __init init(void)
 {
-	const char *feature_name;
-
-	if (!cpu_has_avx2 || !cpu_has_osxsave) {
-		pr_info("AVX2 instructions are not detected.\n");
-		return -ENODEV;
-	}
-	if (!cpu_has_xfeatures(XFEATURE_MASK_SSE | XFEATURE_MASK_YMM,
-				&feature_name)) {
-		pr_info("CPU feature '%s' is not supported.\n", feature_name);
+	if (!avx2_usable()) {
+		pr_info("AVX2 instructions are not supported.\n");
 		return -ENODEV;
 	}
 
