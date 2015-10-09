@@ -23,7 +23,7 @@
 
 #define arch_max_pkey()	(boot_cpu_has(X86_FEATURE_OSPKE) ?	\
 				CONFIG_NR_PROTECTION_KEYS : 1)
-#define arch_validate_pkey(pkey) (((key) >= 0) && ((key) < arch_max_pkey()))
+#define arch_validate_pkey(pkey) (((pkey) >= 0) && ((pkey) < arch_max_pkey()))
 
 #endif /* CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS */
 
