@@ -182,7 +182,8 @@ bool kvm_mtrr_check_gfn_range_consistency(struct kvm_vcpu *vcpu, gfn_t gfn,
 
 #define KVM_SUPPORTED_XCR0     (XFEATURE_MASK_FP | XFEATURE_MASK_SSE \
 				| XFEATURE_MASK_YMM | XFEATURE_MASK_BNDREGS \
-				| XFEATURE_MASK_BNDCSR | XFEATURE_MASK_AVX512)
+				| XFEATURE_MASK_BNDCSR | XFEATURE_MASK_AVX512 \
+				| XFEATURE_MASK_PKRU)
 extern u64 host_xcr0;
 
 extern u64 kvm_supported_xcr0(void);
