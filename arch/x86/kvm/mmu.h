@@ -3,6 +3,7 @@
 
 #include <linux/kvm_host.h>
 #include "kvm_cache_regs.h"
+#include "x86.h"
 
 #define PT64_PT_BITS 9
 #define PT64_ENT_PER_PAGE (1 << PT64_PT_BITS)
@@ -24,6 +25,11 @@
 #define PT_PAGE_SIZE_MASK (1ULL << PT_PAGE_SIZE_SHIFT)
 #define PT_PAT_MASK (1ULL << 7)
 #define PT_GLOBAL_MASK (1ULL << 8)
+
+#define PT64_PKEY_BIT0 (1ULL << _PAGE_BIT_PKEY_BIT0)
+#define PT64_PKEY_BIT1 (1ULL << _PAGE_BIT_PKEY_BIT1)
+#define PT64_PKEY_BIT2 (1ULL << _PAGE_BIT_PKEY_BIT2)
+#define PT64_PKEY_BIT3 (1ULL << _PAGE_BIT_PKEY_BIT3)
 #define PT64_NX_SHIFT 63
 #define PT64_NX_MASK (1ULL << PT64_NX_SHIFT)
 
@@ -44,6 +50,15 @@
 #define PT_DIRECTORY_LEVEL 2
 #define PT_PAGE_TABLE_LEVEL 1
 #define PT_MAX_HUGEPAGE_LEVEL (PT_PAGE_TABLE_LEVEL + KVM_NR_PAGE_SIZES - 1)
+
+#define PKEYS_BIT0_VALUE (1ULL << 0)
+#define PKEYS_BIT1_VALUE (1ULL << 1)
+#define PKEYS_BIT2_VALUE (1ULL << 2)
+#define PKEYS_BIT3_VALUE (1ULL << 3)
+
+#define PKRU_READ 0
+#define PKRU_WRITE 1
+#define PKRU_ATTRS 2
 
 static inline u64 rsvd_bits(int s, int e)
 {
@@ -145,10 +160,38 @@ static inline bool is_write_protection(struct kvm_vcpu *vcpu)
  * fault with the given access (in ACC_* format)?
  */
 static inline bool permission_fault(struct kvm_vcpu *vcpu, struct kvm_mmu *mmu,
-				    unsigned pte_access, unsigned pfec)
+				    unsigned pte_access, unsigned pte_pkeys, unsigned pfec)
 {
-	int cpl = kvm_x86_ops->get_cpl(vcpu);
-	unsigned long rflags = kvm_x86_ops->get_rflags(vcpu);
+	unsigned long smap, rflags;
+	u32 pkru;
+	int cpl, index;
+	bool wf, uf, pk, pkru_ad, pkru_wd;
+
+	cpl = kvm_x86_ops->get_cpl(vcpu);
+	rflags = kvm_x86_ops->get_rflags(vcpu);
+
+	pkru = read_pkru();
+	pkru_ad = (pkru >> (pte_pkeys * PKRU_ATTRS + PKRU_READ)) & 1;
+	pkru_wd = (pkru >> (pte_pkeys * PKRU_ATTRS + PKRU_WRITE)) & 1;
+
+	wf = pfec & PFERR_WRITE_MASK;
+	uf = pfec & PFERR_USER_MASK;
+
+	/*
+	* PKeys 2nd and 6th conditions:
+	* 2.EFER_LMA=1
+	* 6.PKRU.AD=1
+	*		or The access is a data write and PKRU.WD=1 and
+	*			either CR0.WP=1 or it is a user mode access
+	*/
+	pk = is_long_mode(vcpu) && (pkru_ad ||
+			(pkru_wd && wf && (is_write_protection(vcpu) || uf)));
+
+	/*
+	* PK bit right value in pfec equal to
+	* PK bit current value in pfec and pk value.
+	*/
+	pfec &= (pk << PFERR_PK_BIT) + ~PFERR_PK_MASK;
 
 	/*
 	 * If CPL < 3, SMAP prevention are disabled if EFLAGS.AC = 1.
@@ -163,8 +206,8 @@ static inline bool permission_fault(struct kvm_vcpu *vcpu, struct kvm_mmu *mmu,
 	 * but it will be one in index if SMAP checks are being overridden.
 	 * It is important to keep this branchless.
 	 */
-	unsigned long smap = (cpl - 3) & (rflags & X86_EFLAGS_AC);
-	int index = (pfec >> 1) +
+	smap = (cpl - 3) & (rflags & X86_EFLAGS_AC);
+	index = (pfec >> 1) +
 		    (smap >> (X86_EFLAGS_AC_BIT - PFERR_RSVD_BIT + 1));
 
 	WARN_ON(pfec & PFERR_RSVD_MASK);
