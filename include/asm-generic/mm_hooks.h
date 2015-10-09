@@ -38,4 +38,11 @@ static inline bool arch_pte_access_permitted(pte_t pte, bool write)
 	/* by default, allow everything */
 	return true;
 }
+
+static inline int arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
+		unsigned long init_val)
+{
+	return -EINVAL;
+}
+
 #endif	/* _ASM_GENERIC_MM_HOOKS_H */

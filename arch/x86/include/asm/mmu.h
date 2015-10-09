@@ -22,6 +22,13 @@ typedef struct {
 	void __user *vdso;
 
 	atomic_t perf_rdpmc_allowed;	/* nonzero if rdpmc is allowed */
+#ifdef CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS
+	/*
+	 * One bit per protection key says whether userspace can
+	 * use it or not.  protected by mmap_sem.
+	 */
+	u16 pkey_allocation_map;
+#endif
 } mm_context_t;
 
 #ifdef CONFIG_SMP

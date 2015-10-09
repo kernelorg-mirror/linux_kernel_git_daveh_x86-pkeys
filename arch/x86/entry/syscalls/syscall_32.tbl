@@ -383,3 +383,5 @@
 374	i386	userfaultfd		sys_userfaultfd
 375	i386	membarrier		sys_membarrier
 376	i386	pkey_mprotect		sys_pkey_mprotect
+377	i386	pkey_alloc		sys_pkey_alloc
+378	i386	pkey_free		sys_pkey_free

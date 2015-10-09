@@ -107,7 +107,12 @@ static inline void enter_lazy_tlb(struct mm_struct *mm, struct task_struct *tsk)
 static inline int init_new_context(struct task_struct *tsk,
 				   struct mm_struct *mm)
 {
+#ifdef CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS
+	/* pkey 0 is the default and always allocated */
+	mm->context.pkey_allocation_map = 0x1;
+#endif
 	init_new_context_ldt(tsk, mm);
+
 	return 0;
 }
 static inline void destroy_context(struct mm_struct *mm)
@@ -327,4 +332,16 @@ static inline bool arch_pte_access_permitted(pte_t pte, bool write)
 	return __pkru_allows_pkey(pte_pkey(pte), write);
 }
 
-#endif /* _ASM_X86_MMUeCONTEXT_H */
+extern int arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
+		unsigned long init_val);
+
+#ifdef CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS
+#define mm_pkey_allocation_map(mm)	(mm->context.pkey_allocation_map)
+#define mm_set_pkey_allocated(mm, pkey) do {		\
+	mm_pkey_allocation_map(mm) |= (1 << pkey);	\
+} while (0)
+#define mm_set_pkey_free(mm, pkey) do {			\
+	mm_pkey_allocation_map(mm) &= ~(1 << pkey);	\
+} while (0)
+#endif
+#endif /* _ASM_X86_MMU_CONTEXT_H */

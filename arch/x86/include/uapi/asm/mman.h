@@ -21,10 +21,6 @@
 		((vm_flags) & VM_PKEY_BIT2 ? _PAGE_PKEY_BIT2 : 0) |	\
 		((vm_flags) & VM_PKEY_BIT3 ? _PAGE_PKEY_BIT3 : 0))
 
-#define arch_max_pkey()	(boot_cpu_has(X86_FEATURE_OSPKE) ?	\
-				CONFIG_NR_PROTECTION_KEYS : 1)
-#define arch_validate_pkey(pkey) (((pkey) >= 0) && ((pkey) < arch_max_pkey()))
-
 #define ARCH_VM_PKEY_FLAGS (VM_PKEY_BIT0 | VM_PKEY_BIT1 | VM_PKEY_BIT2 | VM_PKEY_BIT3)
 
 #define arch_calc_vm_prot_bits(prot, key) ( 		\
@@ -34,6 +30,10 @@
 		((key) & 0x8 ? VM_PKEY_BIT3 : 0))
 
 #endif /* CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS */
+
+#define arch_max_pkey()	(boot_cpu_has(X86_FEATURE_OSPKE) ? \
+			 CONFIG_NR_PROTECTION_KEYS : 1)
+#define arch_validate_pkey(pkey) (((pkey) >= 0) && ((pkey) < arch_max_pkey()))
 
 #include <asm-generic/mman.h>
 

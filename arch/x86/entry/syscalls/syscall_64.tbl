@@ -332,6 +332,8 @@
 323	common	userfaultfd		sys_userfaultfd
 324	common	membarrier		sys_membarrier
 325	common	pkey_mprotect		sys_pkey_mprotect
+326	common	pkey_alloc		sys_pkey_alloc
+327	common	pkey_free		sys_pkey_free
 
 #
 # x32-specific system call numbers start at 512 to avoid cache impact
