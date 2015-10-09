@@ -354,6 +354,9 @@ static inline int __do_cpuid_ent(struct kvm_cpuid_entry2 *entry, u32 function,
 	const u32 kvm_supported_word10_x86_features =
 		F(XSAVEOPT) | F(XSAVEC) | F(XGETBV1) | f_xsaves;
 
+	/* cpuid 7.0.ecx*/
+	const u32 kvm_supported_word11_x86_features = F(PKU) | 0 /*OSPKE*/;
+
 	/* all calls to cpuid_count() should be made on the same cpu */
 	get_cpu();
 
@@ -431,10 +434,12 @@ static inline int __do_cpuid_ent(struct kvm_cpuid_entry2 *entry, u32 function,
 			cpuid_mask(&entry->ebx, 9);
 			// TSC_ADJUST is emulated
 			entry->ebx |= F(TSC_ADJUST);
-		} else
+			entry->ecx &= kvm_supported_word11_x86_features;
+		} else {
 			entry->ebx = 0;
+			entry->ecx = 0;
+		}
 		entry->eax = 0;
-		entry->ecx = 0;
 		entry->edx = 0;
 		break;
 	}
