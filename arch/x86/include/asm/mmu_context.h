@@ -334,6 +334,8 @@ static inline bool arch_pte_access_permitted(pte_t pte, bool write)
 
 extern int arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
 		unsigned long init_val);
+extern unsigned long arch_get_user_pkey_access(struct task_struct *tsk,
+		int pkey);
 
 #ifdef CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS
 #define mm_pkey_allocation_map(mm)	(mm->context.pkey_allocation_map)
