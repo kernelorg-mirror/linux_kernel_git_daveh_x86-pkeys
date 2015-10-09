@@ -3793,16 +3793,22 @@ static void update_permission_bitmask(struct kvm_vcpu *vcpu,
 {
 	unsigned bit, byte, pfec;
 	u8 map;
-	bool fault, x, w, u, wf, uf, ff, smapf, cr4_smap, cr4_smep, smap = 0;
+	bool fault, x, w, u, smap = 0, pku = 0;
+	bool wf, uf, ff, smapf, rsvdf, pkuf;
+	bool cr4_smap, cr4_smep, cr4_pku;
 
 	cr4_smep = kvm_read_cr4_bits(vcpu, X86_CR4_SMEP);
 	cr4_smap = kvm_read_cr4_bits(vcpu, X86_CR4_SMAP);
+	cr4_pku = kvm_read_cr4_bits(vcpu, X86_CR4_PKE);
+
 	for (byte = 0; byte < ARRAY_SIZE(mmu->permissions); ++byte) {
 		pfec = byte << 1;
 		map = 0;
 		wf = pfec & PFERR_WRITE_MASK;
 		uf = pfec & PFERR_USER_MASK;
 		ff = pfec & PFERR_FETCH_MASK;
+		rsvdf = pfec & PFERR_RSVD_MASK;
+		pkuf = pfec & PFERR_PK_MASK;
 		/*
 		 * PFERR_RSVD_MASK bit is set in PFEC if the access is not
 		 * subject to SMAP restrictions, and cleared otherwise. The
@@ -3841,12 +3847,30 @@ static void update_permission_bitmask(struct kvm_vcpu *vcpu,
 				 *   clearer.
 				 */
 				smap = cr4_smap && u && !uf && !ff;
+
+				/* PKU:the protection keys decide whether user_mode
+				* mappings access pages depend on PKRU value. A fault
+				* is considered as a PKU violation if all of the following
+				* conditions are ture:
+				* 1.CR4_PKE=1.
+				* 2.EFER_LMA=1.
+				* 3.page is present with no reserved bit violations.
+				* 4.the access is not an instruction fetch.
+				* 5.the access is to a user page.
+				* 6.PKRU.AD=1
+				*	or The access is a data write and PKRU.WD=1
+				*		and either CR0.WP=1 or it is a user access.
+				*
+				* The 2nd and 6th conditions are computed
+				* dynamically in permission_fault.
+				*/
+				pku = cr4_pku && !rsvdf && !ff && u;
 			} else
 				/* Not really needed: no U/S accesses on ept  */
 				u = 1;
 
 			fault = (ff && !x) || (uf && !u) || (wf && !w) ||
-				(smapf && smap);
+				(smapf && smap) || (pkuf && pku);
 			map |= fault << bit;
 		}
 		mmu->permissions[byte] = map;

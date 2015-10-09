@@ -159,12 +159,16 @@ enum {
 #define PFERR_USER_BIT 2
 #define PFERR_RSVD_BIT 3
 #define PFERR_FETCH_BIT 4
+#define PFERR_PK_BIT 5
+
 
 #define PFERR_PRESENT_MASK (1U << PFERR_PRESENT_BIT)
 #define PFERR_WRITE_MASK (1U << PFERR_WRITE_BIT)
 #define PFERR_USER_MASK (1U << PFERR_USER_BIT)
 #define PFERR_RSVD_MASK (1U << PFERR_RSVD_BIT)
 #define PFERR_FETCH_MASK (1U << PFERR_FETCH_BIT)
+#define PFERR_PK_MASK (1U << PFERR_PK_BIT)
+
 
 /* apic attention bits */
 #define KVM_APIC_CHECK_VAPIC	0
@@ -290,8 +294,10 @@ struct kvm_mmu {
 	 * Bitmap; bit set = permission fault
 	 * Byte index: page fault error code [4:1]
 	 * Bit index: pte permissions in ACC_* format
+	 *
+	 * Add PFEC.PK(bit 5) for memory protection key
 	 */
-	u8 permissions[16];
+	u8 permissions[32];
 
 	u64 *pae_root;
 	u64 *lm_root;
