@@ -56,6 +56,19 @@ static inline int arch_validate_prot(unsigned long prot)
 #define arch_validate_prot arch_validate_prot
 #endif
 
+#ifndef arch_validate_pkey
+/*
+ * This is called from mprotect_pkey().
+ *
+ * Returns true if the protection keys is valid.
+ */
+static inline bool arch_validate_pkey(int key)
+{
+	return true;
+}
+#define arch_validate_pkey arch_validate_pkey
+#endif
+
 /*
  * Optimisation macro.  It is equivalent to:
  *      (x & bit1) ? bit2 : 0
