@@ -81,6 +81,17 @@ int kvm_update_cpuid(struct kvm_vcpu *vcpu)
 			apic->lapic_timer.timer_mode_mask = 1 << 17;
 	}
 
+	best = kvm_find_cpuid_entry(vcpu, 7, 0);
+	if (!best)
+		return 0;
+
+	/*Update OSPKE bit */
+	if (cpu_has_pku && best->function == 0x7) {
+		best->ecx &= ~F(OSPKE);
+		if (kvm_read_cr4_bits(vcpu, X86_CR4_PKE))
+			best->ecx |= F(OSPKE);
+	}
+
 	best = kvm_find_cpuid_entry(vcpu, 0xD, 0);
 	if (!best) {
 		vcpu->arch.guest_supported_xcr0 = 0;
