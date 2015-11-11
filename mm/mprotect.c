@@ -406,6 +406,13 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
 
 	for (nstart = start ; ; ) {
 		unsigned long newflags;
+		/*
+		 * Each mprotect() call explicitly passes r/w/x permissions.
+		 * If a permission is not passed to mprotect(), it must be
+		 * cleared from the VMA.
+		 */
+		unsigned long mask_off_old_flags = VM_READ | VM_WRITE | VM_EXEC;
+		mask_off_old_flags |= ARCH_VM_PKEY_FLAGS;
 
 		/* Here we know that vma->vm_start <= nstart < vma->vm_end. */
 
@@ -417,7 +424,7 @@ static int do_mprotect_pkey(unsigned long start, size_t len,
 			newflags = calc_vm_prot_bits(prot, vma_pkey(vma));
 		else
 			newflags = calc_vm_prot_bits(prot, pkey);
-		newflags |= (vma->vm_flags & ~(VM_READ | VM_WRITE | VM_EXEC));
+		newflags |= (vma->vm_flags & ~mask_off_old_flags);
 
 		/* newflags >> 4 shift VM_MAY% in place of VM_% */
 		if ((newflags & ~(newflags >> 4)) & (VM_READ | VM_WRITE | VM_EXEC)) {
