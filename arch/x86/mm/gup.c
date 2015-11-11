@@ -10,6 +10,7 @@
 #include <linux/highmem.h>
 #include <linux/swap.h>
 
+#include <asm/mmu_context.h>
 #include <asm/pgtable.h>
 
 static inline pte_t gup_get_pte(pte_t *ptep)
@@ -74,6 +75,8 @@ static inline int pte_allows_gup(unsigned long entry_flags, int write)
 	if (!(entry_flags & (_PAGE_PRESENT|_PAGE_USER)))
 		return 0;
 	if (write && !(entry_flags & (_PAGE_RW)))
+		return 0;
+	if (!arch_pte_access_permitted(entry_flags, write))
 		return 0;
 	return 1;
 }
