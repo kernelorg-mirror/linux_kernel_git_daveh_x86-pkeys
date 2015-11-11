@@ -703,11 +703,12 @@ static __always_inline long __get_user_pages_locked(struct task_struct *tsk,
  * according to the parameters "pages", "write", "force"
  * respectively.
  */
-__always_inline long __get_user_pages_unlocked(struct task_struct *tsk, struct mm_struct *mm,
-					       unsigned long start, unsigned long nr_pages,
+__always_inline long __get_user_pages_unlocked(unsigned long start, unsigned long nr_pages,
 					       int write, int force, struct page **pages,
 					       unsigned int gup_flags)
 {
+	struct task_struct *tsk = current;
+	struct mm_struct *mm = tsk->mm;
 	long ret;
 	down_read(&mm->mmap_sem);
 	ret = __get_user_pages_locked(tsk, mm, start, nr_pages, write, force,
@@ -734,17 +735,16 @@ EXPORT_SYMBOL(__get_user_pages_unlocked);
  * or if "force" shall be set to 1 (get_user_pages_fast misses the
  * "force" parameter).
  */
-long get_user_pages_unlocked(struct task_struct *tsk, struct mm_struct *mm,
-			     unsigned long start, unsigned long nr_pages,
+long get_user_pages_unlocked(unsigned long start, unsigned long nr_pages,
 			     int write, int force, struct page **pages)
 {
-	return __get_user_pages_unlocked(tsk, mm, start, nr_pages, write,
+	return __get_user_pages_unlocked(start, nr_pages, write,
 					 force, pages, FOLL_TOUCH);
 }
 EXPORT_SYMBOL(get_user_pages_unlocked);
 
 /*
- * get_user_pages() - pin user pages in memory
+ * get_foreign_user_pages() - pin user pages in memory
  * @tsk:	the task_struct to use for page fault accounting, or
  *		NULL if faults are not to be recorded.
  * @mm:		mm_struct of target mm
@@ -798,14 +798,30 @@ EXPORT_SYMBOL(get_user_pages_unlocked);
  * should use get_user_pages because it cannot pass
  * FAULT_FLAG_ALLOW_RETRY to handle_mm_fault.
  */
-long get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
-		unsigned long start, unsigned long nr_pages, int write,
-		int force, struct page **pages, struct vm_area_struct **vmas)
+long get_foreign_user_pages(struct task_struct *tsk, struct mm_struct *mm,
+		unsigned long start, unsigned long nr_pages,
+		int write, int force, struct page **pages,
+		struct vm_area_struct **vmas)
 {
 	return __get_user_pages_locked(tsk, mm, start, nr_pages, write, force,
-				       pages, vmas, FOLL_TOUCH);
+					pages, vmas, FOLL_TOUCH);
 }
-EXPORT_SYMBOL(get_user_pages);
+EXPORT_SYMBOL(get_foreign_user_pages);
+
+/*
+ * This is exactly the same as get_foreign_user_pages(), just
+ * with a less-flexible calling convention where we assume that
+ * the task and mm being operated on are the current task's.
+ */
+long get_current_user_pages(unsigned long start, unsigned long nr_pages,
+		int write, int force, struct page **pages,
+		struct vm_area_struct **vmas)
+{
+	return get_foreign_user_pages(current, current->mm,
+				      start, nr_pages, write, force,
+				      pages, vmas);
+}
+EXPORT_SYMBOL(get_current_user_pages);
 
 /**
  * populate_vma_page_range() -  populate a range of pages in the vma.
