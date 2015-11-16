@@ -715,37 +715,6 @@ static __always_inline long __get_user_pages_locked(struct task_struct *tsk,
 }
 
 /*
- * We can leverage the VM_FAULT_RETRY functionality in the page fault
- * paths better by using either get_user_pages_locked() or
- * get_user_pages_unlocked().
- *
- * get_user_pages_locked() is suitable to replace the form:
- *
- *      down_read(&mm->mmap_sem);
- *      do_something()
- *      get_user_pages(tsk, mm, ..., pages, NULL);
- *      up_read(&mm->mmap_sem);
- *
- *  to:
- *
- *      int locked = 1;
- *      down_read(&mm->mmap_sem);
- *      do_something()
- *      get_user_pages_locked(tsk, mm, ..., pages, &locked);
- *      if (locked)
- *          up_read(&mm->mmap_sem);
- */
-long get_user_pages_locked(struct task_struct *tsk, struct mm_struct *mm,
-			   unsigned long start, unsigned long nr_pages,
-			   int write, int force, struct page **pages,
-			   int *locked)
-{
-	return __get_user_pages_locked(tsk, mm, start, nr_pages, write, force,
-				       pages, NULL, locked, true, FOLL_TOUCH);
-}
-EXPORT_SYMBOL(get_user_pages_locked);
-
-/*
  * Same as get_user_pages_unlocked(...., FOLL_TOUCH) but it allows to
  * pass additional gup_flags as last parameter (like FOLL_HWPOISON).
  *
