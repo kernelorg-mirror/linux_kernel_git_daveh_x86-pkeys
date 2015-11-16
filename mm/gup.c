@@ -625,18 +625,10 @@ static __always_inline long __get_user_pages_locked(struct task_struct *tsk,
 						int write, int force,
 						struct page **pages,
 						struct vm_area_struct **vmas,
-						int *locked, bool notify_drop,
 						unsigned int flags)
 {
+	int locked = 1;
 	long ret, pages_done;
-	bool lock_dropped;
-
-	if (locked) {
-		/* if VM_FAULT_RETRY can be returned, vmas become invalid */
-		BUG_ON(vmas);
-		/* check caller initialized locked */
-		BUG_ON(*locked != 1);
-	}
 
 	if (pages)
 		flags |= FOLL_GET;
@@ -646,16 +638,12 @@ static __always_inline long __get_user_pages_locked(struct task_struct *tsk,
 		flags |= FOLL_FORCE;
 
 	pages_done = 0;
-	lock_dropped = false;
 	for (;;) {
 		ret = __get_user_pages(tsk, mm, start, nr_pages, flags, pages,
-				       vmas, locked);
-		if (!locked)
-			/* VM_FAULT_RETRY couldn't trigger, bypass */
-			return ret;
+				       vmas, &locked);
 
 		/* VM_FAULT_RETRY cannot return errors */
-		if (!*locked) {
+		if (!locked) {
 			BUG_ON(ret < 0);
 			BUG_ON(ret >= nr_pages);
 		}
@@ -670,7 +658,7 @@ static __always_inline long __get_user_pages_locked(struct task_struct *tsk,
 			if (!nr_pages)
 				break;
 		}
-		if (*locked) {
+		if (locked) {
 			/* VM_FAULT_RETRY didn't trigger */
 			if (!pages_done)
 				pages_done = ret;
@@ -685,8 +673,7 @@ static __always_inline long __get_user_pages_locked(struct task_struct *tsk,
 		 * without FAULT_FLAG_ALLOW_RETRY but with
 		 * FAULT_FLAG_TRIED.
 		 */
-		*locked = 1;
-		lock_dropped = true;
+		locked = 1;
 		down_read(&mm->mmap_sem);
 		ret = __get_user_pages(tsk, mm, start, 1, flags | FOLL_TRIED,
 				       pages, NULL, NULL);
@@ -702,14 +689,6 @@ static __always_inline long __get_user_pages_locked(struct task_struct *tsk,
 			break;
 		pages++;
 		start += PAGE_SIZE;
-	}
-	if (notify_drop && lock_dropped && *locked) {
-		/*
-		 * We must let the caller know we temporarily dropped the lock
-		 * and so the critical section protected by it was lost.
-		 */
-		up_read(&mm->mmap_sem);
-		*locked = 0;
 	}
 	return pages_done;
 }
@@ -730,12 +709,10 @@ __always_inline long __get_user_pages_unlocked(struct task_struct *tsk, struct m
 					       unsigned int gup_flags)
 {
 	long ret;
-	int locked = 1;
 	down_read(&mm->mmap_sem);
 	ret = __get_user_pages_locked(tsk, mm, start, nr_pages, write, force,
-				      pages, NULL, &locked, false, gup_flags);
-	if (locked)
-		up_read(&mm->mmap_sem);
+				      pages, NULL, gup_flags);
+	up_read(&mm->mmap_sem);
 	return ret;
 }
 EXPORT_SYMBOL(__get_user_pages_unlocked);
@@ -826,7 +803,7 @@ long get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 		int force, struct page **pages, struct vm_area_struct **vmas)
 {
 	return __get_user_pages_locked(tsk, mm, start, nr_pages, write, force,
-				       pages, vmas, NULL, false, FOLL_TOUCH);
+				       pages, vmas, FOLL_TOUCH);
 }
 EXPORT_SYMBOL(get_user_pages);
 
