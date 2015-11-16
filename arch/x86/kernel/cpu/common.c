@@ -619,6 +619,7 @@ void get_cpu_cap(struct cpuinfo_x86 *c)
 		cpuid_count(0x00000007, 0, &eax, &ebx, &ecx, &edx);
 
 		c->x86_capability[9] = ebx;
+		c->x86_capability[14] = ecx;
 	}
 
 	/* Extended state features: level 0x0000000d */
