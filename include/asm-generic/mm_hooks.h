@@ -38,4 +38,5 @@ static inline bool arch_pte_access_permitted(pte_t pte, bool write)
 	/* by default, allow everything */
 	return true;
 }
+
 #endif	/* _ASM_GENERIC_MM_HOOKS_H */
