@@ -384,3 +384,5 @@
 375	i386	membarrier		sys_membarrier
 376	i386	mlock2			sys_mlock2
 377	i386	pkey_mprotect		sys_pkey_mprotect
+378	i386	pkey_alloc		sys_pkey_alloc
+379	i386	pkey_free		sys_pkey_free
