@@ -372,12 +372,12 @@ static int ashmem_mmap(struct file *file, struct vm_area_struct *vma)
 	}
 
 	/* requested protection bits must match our allowed protection mask */
-	if (unlikely((vma->vm_flags & ~calc_vm_prot_bits(asma->prot_mask)) &
-		     calc_vm_prot_bits(PROT_MASK))) {
+	if (unlikely((vma->vm_flags & ~calc_vm_prot_bits(asma->prot_mask, 0)) &
+		     calc_vm_prot_bits(PROT_MASK, 0))) {
 		ret = -EPERM;
 		goto out;
 	}
-	vma->vm_flags &= ~calc_vm_may_flags(~asma->prot_mask);
+	vma->vm_flags &= ~calc_vm_may_flags(~asma->prot_mask, 0);
 
 	if (!asma->file) {
 		char *name = ASHMEM_NAME_DEF;
