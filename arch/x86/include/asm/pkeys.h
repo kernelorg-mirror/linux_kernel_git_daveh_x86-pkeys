@@ -16,8 +16,9 @@
 } while (0)
 
 static inline
-bool mm_pkey_is_allocated(struct mm_struct *mm, unsigned long pkey)
+bool mm_pkey_is_allocated(struct mm_struct *mm, int pkey)
 {
+	int ret;
 	if (!arch_validate_pkey(pkey))
 		return true;
 
