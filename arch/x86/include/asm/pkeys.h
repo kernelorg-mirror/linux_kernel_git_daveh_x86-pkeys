@@ -16,12 +16,17 @@
 } while (0)
 
 static inline
-bool mm_pkey_is_allocated(struct mm_struct *mm, unsigned long pkey)
+bool mm_pkey_is_allocated(struct mm_struct *mm, int pkey)
 {
+	int ret;
+	trace_printk("%s(pkey=%d)::%d\n", __func__, pkey, __LINE__);
 	if (!arch_validate_pkey(pkey))
 		return true;
 
-	return mm_pkey_allocation_map(mm) & (1 << pkey);
+	trace_printk("%s(pkey=%d)::%d\n", __func__, pkey, __LINE__);
+	ret = mm_pkey_allocation_map(mm) & (1 << pkey);
+	trace_printk("%s() alloc map@%d: %x\n", __func__, __LINE__, mm->context.pkey_allocation_map);
+	return ret;
 }
 
 static inline
