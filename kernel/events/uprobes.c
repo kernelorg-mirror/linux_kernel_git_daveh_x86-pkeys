@@ -1685,7 +1685,7 @@ static void mmf_recalc_uprobes(struct mm_struct *mm)
 	clear_bit(MMF_HAS_UPROBES, &mm->flags);
 }
 
-static int is_trap_at_addr(struct mm_struct *mm, unsigned long vaddr)
+static int is_trap_at_addr(unsigned long vaddr)
 {
 	struct page *page;
 	uprobe_opcode_t opcode;
@@ -1699,7 +1699,7 @@ static int is_trap_at_addr(struct mm_struct *mm, unsigned long vaddr)
 	if (likely(result == 0))
 		goto out;
 
-	result = get_user_pages(NULL, mm, vaddr, 1, 0, 1, &page, NULL);
+	result = get_user_pages(NULL, current->mm, vaddr, 1, 0, 1, &page, NULL);
 	if (result < 0)
 		return result;
 
@@ -1727,7 +1727,7 @@ static struct uprobe *find_active_uprobe(unsigned long bp_vaddr, int *is_swbp)
 		}
 
 		if (!uprobe)
-			*is_swbp = is_trap_at_addr(mm, bp_vaddr);
+			*is_swbp = is_trap_at_addr(bp_vaddr);
 	} else {
 		*is_swbp = -EFAULT;
 	}
