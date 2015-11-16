@@ -182,7 +182,7 @@ finish_or_fault:
  *   slab page or a secondary page from a compound page
  * - don't permit access to VMAs that don't support it, such as I/O mappings
  */
-long get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
+long get_foreign_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 		    unsigned long start, unsigned long nr_pages,
 		    int write, int force, struct page **pages,
 		    struct vm_area_struct **vmas)
@@ -197,27 +197,34 @@ long get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 	return __get_user_pages(tsk, mm, start, nr_pages, flags, pages, vmas,
 				NULL);
 }
-EXPORT_SYMBOL(get_user_pages);
+EXPORT_SYMBOL(get_foreign_user_pages);
 
-long __get_user_pages_unlocked(struct task_struct *tsk, struct mm_struct *mm,
-			       unsigned long start, unsigned long nr_pages,
+long get_current_user_pages(unsigned long start, unsigned long nr_pages,
+		    int write, int force, struct page **pages,
+		    struct vm_area_struct **vmas)
+{
+	return get_foreign_user_pages(current, current->mm, start, nr_pages,
+				      write, force, pages, vmas);
+}
+EXPORT_SYMBOL(get_current_user_pages);
+
+long __get_user_pages_unlocked(unsigned long start, unsigned long nr_pages,
 			       int write, int force, struct page **pages,
 			       unsigned int gup_flags)
 {
 	long ret;
-	down_read(&mm->mmap_sem);
-	ret = get_user_pages(tsk, mm, start, nr_pages, write, force,
-			     pages, NULL);
-	up_read(&mm->mmap_sem);
+	down_read(&current->mm->mmap_sem);
+	ret = get_current_user_pages(start, nr_pages, write, force,
+				     pages, NULL);
+	up_read(&current->mm->mmap_sem);
 	return ret;
 }
 EXPORT_SYMBOL(__get_user_pages_unlocked);
 
-long get_user_pages_unlocked(struct task_struct *tsk, struct mm_struct *mm,
-			     unsigned long start, unsigned long nr_pages,
+long get_user_pages_unlocked(unsigned long start, unsigned long nr_pages,
 			     int write, int force, struct page **pages)
 {
-	return __get_user_pages_unlocked(tsk, mm, start, nr_pages, write,
+	return __get_user_pages_unlocked(start, nr_pages, write,
 					 force, pages, 0);
 }
 EXPORT_SYMBOL(get_user_pages_unlocked);
