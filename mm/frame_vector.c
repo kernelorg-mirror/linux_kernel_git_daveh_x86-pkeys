@@ -40,7 +40,6 @@ int get_vaddr_frames(unsigned long start, unsigned int nr_frames,
 	struct vm_area_struct *vma;
 	int ret = 0;
 	int err;
-	int locked;
 
 	if (nr_frames == 0)
 		return 0;
@@ -49,7 +48,6 @@ int get_vaddr_frames(unsigned long start, unsigned int nr_frames,
 		nr_frames = vec->nr_allocated;
 
 	down_read(&mm->mmap_sem);
-	locked = 1;
 	vma = find_vma_intersection(mm, start, start + 1);
 	if (!vma) {
 		ret = -EFAULT;
@@ -58,8 +56,8 @@ int get_vaddr_frames(unsigned long start, unsigned int nr_frames,
 	if (!(vma->vm_flags & (VM_IO | VM_PFNMAP))) {
 		vec->got_ref = true;
 		vec->is_pfns = false;
-		ret = get_user_pages_locked(current, mm, start, nr_frames,
-			write, force, (struct page **)(vec->ptrs), &locked);
+		ret = get_user_pages(current, mm, start, nr_frames,
+			write, force, (struct page **)(vec->ptrs), NULL);
 		goto out;
 	}
 
@@ -87,8 +85,7 @@ int get_vaddr_frames(unsigned long start, unsigned int nr_frames,
 		vma = find_vma_intersection(mm, start, start + 1);
 	} while (vma && vma->vm_flags & (VM_IO | VM_PFNMAP));
 out:
-	if (locked)
-		up_read(&mm->mmap_sem);
+	up_read(&mm->mmap_sem);
 	if (!ret)
 		ret = -EFAULT;
 	if (ret > 0)
