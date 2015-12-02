@@ -243,4 +243,24 @@ static inline void arch_unmap(struct mm_struct *mm, struct vm_area_struct *vma,
 		mpx_notify_unmap(mm, vma, start, end);
 }
 
+static inline int vma_pkey(struct vm_area_struct *vma)
+{
+	u16 pkey = 0;
+#ifdef CONFIG_X86_INTEL_MEMORY_PROTECTION_KEYS
+	unsigned long vma_pkey_mask = VM_PKEY_BIT0 | VM_PKEY_BIT1 |
+				      VM_PKEY_BIT2 | VM_PKEY_BIT3;
+	/*
+	 * ffs is one-based, not zero-based, so bias back down by 1.
+	 */
+	int vm_pkey_shift = __builtin_ffsl(vma_pkey_mask) - 1;
+	/*
+	 * gcc generates better code if we do this rather than:
+	 * pkey = (flags & mask) >> shift
+	 */
+	pkey = (vma->vm_flags >> vm_pkey_shift) &
+	       (vma_pkey_mask >> vm_pkey_shift);
+#endif
+	return pkey;
+}
+
 #endif /* _ASM_X86_MMU_CONTEXT_H */
