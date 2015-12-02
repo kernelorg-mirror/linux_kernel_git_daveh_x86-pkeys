@@ -63,6 +63,30 @@ retry:
 #endif
 }
 
+static inline int pte_allows_gup(pte_t pte, int write)
+{
+	/*
+	 * 'pte' can reall be a pte, pmd or pud.  We only check
+	 * _PAGE_PRESENT, _PAGE_USER, and _PAGE_RW in here which
+	 * are the same value on all 3 types.
+	 */
+	if (!(pte_flags(pte) & (_PAGE_PRESENT|_PAGE_USER)))
+		return 0;
+	if (write && !(pte_write(pte)))
+		return 0;
+	return 1;
+}
+
+static inline int pmd_allows_gup(pmd_t pmd, int write)
+{
+	return pte_allows_gup(*(pte_t *)&pmd, write);
+}
+
+static inline int pud_allows_gup(pud_t pud, int write)
+{
+	return pte_allows_gup(*(pte_t *)&pud, write);
+}
+
 /*
  * The performance critical leaf functions are made noinline otherwise gcc
  * inlines everything into a single function which results in too much
@@ -71,12 +95,7 @@ retry:
 static noinline int gup_pte_range(pmd_t pmd, unsigned long addr,
 		unsigned long end, int write, struct page **pages, int *nr)
 {
-	unsigned long mask;
 	pte_t *ptep;
-
-	mask = _PAGE_PRESENT|_PAGE_USER;
-	if (write)
-		mask |= _PAGE_RW;
 
 	ptep = pte_offset_map(&pmd, addr);
 	do {
@@ -88,8 +107,8 @@ static noinline int gup_pte_range(pmd_t pmd, unsigned long addr,
 			pte_unmap(ptep);
 			return 0;
 		}
-
-		if ((pte_flags(pte) & (mask | _PAGE_SPECIAL)) != mask) {
+		if (!pte_allows_gup(pte, write) ||
+		    pte_special(pte)) {
 			pte_unmap(ptep);
 			return 0;
 		}
@@ -117,14 +136,10 @@ static inline void get_head_page_multiple(struct page *page, int nr)
 static noinline int gup_huge_pmd(pmd_t pmd, unsigned long addr,
 		unsigned long end, int write, struct page **pages, int *nr)
 {
-	unsigned long mask;
 	struct page *head, *page;
 	int refs;
 
-	mask = _PAGE_PRESENT|_PAGE_USER;
-	if (write)
-		mask |= _PAGE_RW;
-	if ((pmd_flags(pmd) & mask) != mask)
+	if (!pmd_allows_gup(pmd, write))
 		return 0;
 	/* hugepages are never "special" */
 	VM_BUG_ON(pmd_flags(pmd) & _PAGE_SPECIAL);
@@ -193,14 +208,10 @@ static int gup_pmd_range(pud_t pud, unsigned long addr, unsigned long end,
 static noinline int gup_huge_pud(pud_t pud, unsigned long addr,
 		unsigned long end, int write, struct page **pages, int *nr)
 {
-	unsigned long mask;
 	struct page *head, *page;
 	int refs;
 
-	mask = _PAGE_PRESENT|_PAGE_USER;
-	if (write)
-		mask |= _PAGE_RW;
-	if ((pud_flags(pud) & mask) != mask)
+	if (!pud_allows_gup(pud, write))
 		return 0;
 	/* hugepages are never "special" */
 	VM_BUG_ON(pud_flags(pud) & _PAGE_SPECIAL);
