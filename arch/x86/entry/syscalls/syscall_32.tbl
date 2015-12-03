@@ -386,3 +386,5 @@
 377	i386	pkey_mprotect		sys_pkey_mprotect
 378	i386	pkey_alloc		sys_pkey_alloc
 379	i386	pkey_free		sys_pkey_free
+380	i386	pkey_get		sys_pkey_get
+381	i386	pkey_set		sys_pkey_set
