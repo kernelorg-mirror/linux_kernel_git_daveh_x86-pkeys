@@ -7,6 +7,7 @@
 #include <asm/pkeys.h>
 #include <asm/mmu_context.h>
 #else /* ! CONFIG_ARCH_HAS_PKEYS */
+#define ARCH_VM_PKEY_FLAGS 0
 
 /*
  * This is called from mprotect_pkey().
