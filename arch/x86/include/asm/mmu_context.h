@@ -340,5 +340,7 @@ static inline bool arch_pte_access_permitted(pte_t pte, bool write)
 
 extern int arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
 		unsigned long init_val);
+extern unsigned long arch_get_user_pkey_access(struct task_struct *tsk,
+		int pkey);
 
 #endif /* _ASM_X86_MMU_CONTEXT_H */
