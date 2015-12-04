@@ -2,10 +2,10 @@
 #define _LINUX_PKEYS_H
 
 #include <linux/mm_types.h>
-#include <asm/mmu_context.h>
 
 #ifdef CONFIG_ARCH_HAS_PKEYS
 #include <asm/pkeys.h>
+#include <asm/mmu_context.h>
 #else /* ! CONFIG_ARCH_HAS_PKEYS */
 
 /*
@@ -16,6 +16,11 @@
 static inline bool arch_validate_pkey(int key)
 {
 	return true;
+}
+
+static inline int vma_pkey(struct vm_area_struct *vma)
+{
+	return 0;
 }
 #endif /* ! CONFIG_ARCH_HAS_PKEYS */
 
