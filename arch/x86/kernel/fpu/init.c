@@ -351,6 +351,7 @@ __setup("no387", no_387);
  */
 static int __init x86_noxsave_setup(char *s)
 {
+	printk("%s('%s')\n", __func__, s);
 	if (strlen(s))
 		return 0;
 
@@ -365,6 +366,7 @@ __setup("noxsave", x86_noxsave_setup);
  */
 static int __init x86_noxsaveopt_setup(char *s)
 {
+	printk("%s('%s')\n", __func__, s);
 	setup_clear_cpu_cap(X86_FEATURE_XSAVEOPT);
 
 	return 1;
@@ -376,6 +378,7 @@ __setup("noxsaveopt", x86_noxsaveopt_setup);
  */
 static int __init x86_noxsaves_setup(char *s)
 {
+	printk("%s('%s')\n", __func__, s);
 	setup_clear_cpu_cap(X86_FEATURE_XSAVES);
 
 	return 1;

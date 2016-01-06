@@ -99,8 +99,10 @@ static int process_vm_rw_single_vec(unsigned long addr,
 		size_t bytes;
 
 		/* Get the pages we're interested in */
-		pages = get_user_pages_unlocked(task, mm, pa, pages,
-						vm_write, 0, process_pages);
+		down_read(&mm->mmap_sem);
+		pages = get_foreign_user_pages(task, mm, pa, pages, vm_write,
+						0, process_pages, NULL);
+		up_read(&mm->mmap_sem);
 		if (pages <= 0)
 			return -EFAULT;
 
