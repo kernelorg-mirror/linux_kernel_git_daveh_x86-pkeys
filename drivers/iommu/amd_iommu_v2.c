@@ -500,9 +500,11 @@ static void do_fault(struct work_struct *work)
 	struct mm_struct *mm;
 	struct vm_area_struct *vma;
 	u64 address;
-	int ret, write;
+	int ret, flags;
 
-	write = !!(fault->flags & PPR_FAULT_WRITE);
+	if (fault->flags & PPR_FAULT_WRITE)
+		flags = FAULT_FLAG_WRITE;
+	flags |= FAULT_FLAG_FOREIGN;
 
 	mm = fault->state->mm;
 	address = fault->address;
@@ -523,7 +525,7 @@ static void do_fault(struct work_struct *work)
 		goto out;
 	}
 
-	ret = handle_mm_fault(mm, vma, address, write);
+	ret = handle_mm_fault(mm, vma, address, flags);
 	if (ret & VM_FAULT_ERROR) {
 		/* failed to service fault */
 		up_read(&mm->mmap_sem);
