@@ -385,3 +385,5 @@
 376	i386	mlock2			sys_mlock2
 377	i386	copy_file_range		sys_copy_file_range
 378	i386	pkey_mprotect		sys_pkey_mprotect
+379	i386	pkey_alloc		sys_pkey_alloc
+380	i386	pkey_free		sys_pkey_free
