@@ -5,6 +5,7 @@
  */
 #include <linux/compat.h>
 #include <linux/cpu.h>
+#include <linux/mman.h>
 #include <linux/pkeys.h>
 
 #include <asm/fpu/api.h>
@@ -778,6 +779,7 @@ const void *get_xsave_field_ptr(int xsave_state)
 	return get_xsave_addr(&fpu->state.xsave, xsave_state);
 }
 
+#ifdef CONFIG_ARCH_HAS_PKEYS
 
 /*
  * Set xfeatures (aka XSTATE_BV) bit for a feature that we want
@@ -943,3 +945,4 @@ int arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
 		return -EINVAL;
 	return __arch_set_user_pkey_access(tsk, pkey, init_val);
 }
+#endif /* CONFIG_ARCH_HAS_PKEYS */
