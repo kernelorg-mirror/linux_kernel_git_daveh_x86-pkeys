@@ -871,7 +871,7 @@ out:
  * not modfiy PKRU *itself* here, only the XSAVE state that will
  * be restored in to PKRU when we return back to userspace.
  */
-int arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
+int __arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
 		unsigned long init_val)
 {
 	struct xregs_state *xsave = &tsk->thread.fpu.state.xsave;
@@ -929,4 +929,17 @@ int arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
 			sizeof(new_pkru_state));
 
 	return 0;
+}
+
+/*
+ * When setting a userspace-provided value, we need to ensure
+ * that it is valid.  The __ version can get used by
+ * kernel-internal uses like the execute-only support.
+ */
+int arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
+		unsigned long init_val)
+{
+	if (!validate_pkey(pkey))
+		return -EINVAL;
+	return __arch_set_user_pkey_access(tsk, pkey, init_val);
 }
