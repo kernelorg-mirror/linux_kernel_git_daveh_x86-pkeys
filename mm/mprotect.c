@@ -537,3 +537,44 @@ SYSCALL_DEFINE1(pkey_free, int, pkey)
 	 */
 	return ret;
 }
+
+SYSCALL_DEFINE2(pkey_get, int, pkey, unsigned long, flags)
+{
+	unsigned long ret = 0;
+
+	if (flags)
+		return -EINVAL;
+
+	down_write(&current->mm->mmap_sem);
+	if (!mm_pkey_is_allocated(current->mm, pkey))
+		ret = -EBADF;
+	up_write(&current->mm->mmap_sem);
+
+	if (ret)
+		return ret;
+
+	ret = arch_get_user_pkey_access(current, pkey);
+
+	return ret;
+}
+
+SYSCALL_DEFINE3(pkey_set, int, pkey, unsigned long, access_rights,
+		unsigned long, flags)
+{
+	unsigned long ret = 0;
+
+	if (flags)
+		return -EINVAL;
+
+	down_write(&current->mm->mmap_sem);
+	if (!mm_pkey_is_allocated(current->mm, pkey))
+		ret = -EBADF;
+	up_write(&current->mm->mmap_sem);
+
+	if (ret)
+		return ret;
+
+	ret = arch_set_user_pkey_access(current, pkey, access_rights);
+
+	return ret;
+}
