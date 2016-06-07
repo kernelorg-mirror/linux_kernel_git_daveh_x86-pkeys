@@ -56,7 +56,7 @@ static inline bool validate_pkey(int pkey)
 }
 
 static inline
-bool mm_pkey_is_allocated(struct mm_struct *mm, unsigned long pkey)
+bool mm_pkey_is_allocated(struct mm_struct *mm, int pkey)
 {
 	if (!validate_pkey(pkey))
 		return true;
@@ -107,4 +107,6 @@ extern int arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
 extern int __arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
 		unsigned long init_val);
 
+extern unsigned long arch_get_user_pkey_access(struct task_struct *tsk,
+		int pkey);
 #endif /*_ASM_X86_PKEYS_H */
