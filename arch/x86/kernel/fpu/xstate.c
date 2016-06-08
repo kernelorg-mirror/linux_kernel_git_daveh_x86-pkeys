@@ -690,7 +690,7 @@ void fpu__resume_cpu(void)
  *
  * Note: does not work for compacted buffers.
  */
-void *__raw_xsave_addr(struct xregs_state *xsave, int xstate_feature_mask)
+static void *__raw_xsave_addr(struct xregs_state *xsave, int xstate_feature_mask)
 {
 	int feature_nr = fls64(xstate_feature_mask) - 1;
 
@@ -864,6 +864,7 @@ out:
 
 #define NR_VALID_PKRU_BITS (CONFIG_NR_PROTECTION_KEYS * 2)
 #define PKRU_VALID_MASK (NR_VALID_PKRU_BITS - 1)
+#define PKRU_INIT_STATE	0
 
 /*
  * This will go out and modify the XSAVE buffer so that PKRU is
@@ -882,6 +883,9 @@ int __arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
 	int pkey_shift = (pkey * PKRU_BITS_PER_PKEY);
 	u32 new_pkru_bits = 0;
 
+	/* Only support manipulating current task for now */
+	if (tsk != current)
+		return -EINVAL;
 	/*
 	 * This check implies XSAVE support.  OSPKE only gets
 	 * set if we enable XSAVE and we enable PKU in XCR0.
@@ -907,7 +911,7 @@ int __arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
 	 * state.
 	 */
 	if (!old_pkru_state)
-		new_pkru_state.pkru = 0;
+		new_pkru_state.pkru = PKRU_INIT_STATE;
 	else
 		new_pkru_state.pkru = old_pkru_state->pkru;
 
@@ -944,5 +948,52 @@ int arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
 	if (!validate_pkey(pkey))
 		return -EINVAL;
 	return __arch_set_user_pkey_access(tsk, pkey, init_val);
+}
+
+/*
+ * Figures out what the rights are currently for 'pkey'.
+ * Converts from PKRU's format to the user-visible PKEY_DISABLE_*
+ * format.
+ */
+unsigned long arch_get_user_pkey_access(struct task_struct *tsk, int pkey)
+{
+	struct fpu *fpu = &current->thread.fpu;
+	u32 pkru_reg;
+	int ret = 0;
+
+	/* Only support manipulating current task for now */
+	if (tsk != current)
+		return -1;
+	if (!cpu_feature_enabled(X86_FEATURE_OSPKE))
+		return -1;
+	/*
+	 * The contents of PKRU itself are invalid.  Consult the
+	 * task's XSAVE buffer for PKRU contents.  This is much
+	 * more expensive than reading PKRU directly, but should
+	 * be rare or impossible with eagerfpu mode.
+	 */
+	if (!fpu->fpregs_active) {
+		struct xregs_state *xsave = &fpu->state.xsave;
+		struct pkru_state *pkru_state =
+			get_xsave_addr(xsave, XFEATURE_MASK_PKRU);
+		/*
+		 * PKRU is in its init state and not present in
+		 * the buffer in a saved form.
+		 */
+		if (!pkru_state)
+			return PKRU_INIT_STATE;
+
+		return pkru_state->pkru;
+	}
+	/*
+	 * Consult the user register directly.
+	 */
+	pkru_reg = read_pkru();
+	if (!__pkru_allows_read(pkru_reg, pkey))
+		ret |= PKEY_DISABLE_ACCESS;
+	if (!__pkru_allows_write(pkru_reg, pkey))
+		ret |= PKEY_DISABLE_WRITE;
+
+	return ret;
 }
 #endif /* CONFIG_ARCH_HAS_PKEYS */

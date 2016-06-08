@@ -44,6 +44,14 @@ static inline int mm_pkey_free(struct mm_struct *mm, int pkey)
 static inline int arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
 			unsigned long init_val)
 {
+	return -EINVAL;
+}
+
+static inline
+unsigned long arch_get_user_pkey_access(struct task_struct *tsk, int pkey)
+{
+	if (pkey)
+		return -1;
 	return 0;
 }
 
