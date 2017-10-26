@@ -130,9 +130,134 @@ static inline pud_t native_pudp_get_and_clear(pud_t *xp)
 #endif
 }
 
+#ifdef CONFIG_KAISER
+/*
+ * All top-level KAISER page tables are order-1 pages (8k-aligned
+ * and 8k in size).  The kernel one is at the beginning 4k and
+ * the user (shadow) one is in the last 4k.  To switch between
+ * them, you just need to flip the 12th bit in their addresses.
+ */
+static inline void *ptr_set_bit(void *ptr, int bit)
+{
+	unsigned long __ptr = (unsigned long)ptr;
+	__ptr |= (1<<bit);
+	return (void *)__ptr;
+}
+static inline void *ptr_clear_bit(void *ptr, int bit)
+{
+	unsigned long __ptr = (unsigned long)ptr;
+	__ptr &= ~(1<<bit);
+	return (void *)__ptr;
+}
+static inline pgd_t *native_get_shadow_pgd(pgd_t *pgdp)
+{
+	return ptr_set_bit(pgdp, PAGE_SHIFT);
+}
+static inline pgd_t *native_get_normal_pgd(pgd_t *pgdp)
+{
+	return ptr_clear_bit(pgdp, PAGE_SHIFT);
+}
+static inline p4d_t *native_get_shadow_p4d(p4d_t *p4dp)
+{
+	return ptr_set_bit(p4dp, PAGE_SHIFT);
+}
+static inline p4d_t *native_get_normal_p4d(p4d_t *p4dp)
+{
+	return ptr_clear_bit(p4dp, PAGE_SHIFT);
+}
+#endif /* CONFIG_KAISER */
+
+/*
+ * Page table pages are page-aligned.  The lower half of the top
+ * level is used for userspace and the top half for the kernel.
+ *
+ * Returns true for parts of the PGD that map userspace and
+ * false for the parts that map the kernel.
+ */
+static inline bool pgdp_maps_userspace(void *__ptr)
+{
+	unsigned long ptr = (unsigned long)__ptr;
+
+	return ((ptr % PAGE_SIZE) < (PAGE_SIZE / 2));
+}
+
+/*
+ * Does this PGD allow access via userspace?
+ */
+static inline bool pgd_userspace_access(pgd_t pgd)
+{
+	return (pgd.pgd & _PAGE_USER);
+}
+
+
+void pgd_check_tag(pgd_t *pgd);
+void tag_pgd_with_size(pgd_t *pgd, unsigned long size);
+void clear_pgd_tag(pgd_t *pgd);
+
+/*
+ * Returns the pgd_t that the kernel should use in its page tables.
+ */
+static inline pgd_t kaiser_set_shadow_pgd(pgd_t *pgdp, pgd_t pgd)
+{
+#ifdef CONFIG_KAISER
+	/* ensure pgdp points to an actual correctly-allocated PGD */
+	pgd_check_tag(pgdp);
+
+	if (pgd_userspace_access(pgd)) {
+		if (pgdp_maps_userspace(pgdp)) {
+			/*
+			 * The user/shadow page tables get the full
+			 * PGD, accessible to userspace:
+			 */
+			native_get_shadow_pgd(pgdp)->pgd = pgd.pgd;
+			/*
+			 * For the copy of the pgd that the kernel
+			 * uses, make it unusable to userspace.  This
+			 * ensures if we get out to userspace with the
+			 * wrong CR3 value, userspace will crash
+			 * instead of running.
+			 */
+			pgd.pgd |= _PAGE_NX;
+		}
+	} else if (!pgd.pgd) {
+		/*
+		 * We are clearing the PGD and can not check  _PAGE_USER
+		 * in the zero'd PGD.  We never do this on the
+		 * pre-populated kernel PGDs, except for pgd_bad().
+		 */
+		if (pgdp_maps_userspace(pgdp)) {
+			native_get_shadow_pgd(pgdp)->pgd = pgd.pgd;
+		} else {
+			/*
+			 * Uh, we are very confused.  We have been
+			 * asked to clear a PGD that is in the kernel
+			 * part of the address space.  We preallocated
+			 * all the KAISER PGDs, so this should never
+			 * happen.
+			 */
+			WARN_ON_ONCE(1);
+		}
+	}
+#endif
+	/* return the copy of the PGD we want the kernel to use: */
+	return pgd;
+}
+
+
 static inline void native_set_p4d(p4d_t *p4dp, p4d_t p4d)
 {
+#if defined(CONFIG_KAISER) && !defined(CONFIG_X86_5LEVEL)
+	/*
+	 * set_pgd() does not get called when we are running
+	 * CONFIG_X86_5LEVEL=y.  So, just hack around it.  We
+	 * know here that we have a p4d but that it is really at
+	 * the top level of the page tables; it is really just a
+	 * pgd.
+	 */
+	p4dp->pgd = kaiser_set_shadow_pgd(&p4dp->pgd, p4d.pgd);
+#else /* CONFIG_KAISER */
 	*p4dp = p4d;
+#endif
 }
 
 static inline void native_p4d_clear(p4d_t *p4d)
@@ -146,7 +271,11 @@ static inline void native_p4d_clear(p4d_t *p4d)
 
 static inline void native_set_pgd(pgd_t *pgdp, pgd_t pgd)
 {
+#ifdef CONFIG_KAISER
+	*pgdp = kaiser_set_shadow_pgd(pgdp, pgd);
+#else /* CONFIG_KAISER */
 	*pgdp = pgd;
+#endif
 }
 
 static inline void native_pgd_clear(pgd_t *pgd)

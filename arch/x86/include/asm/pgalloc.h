@@ -61,20 +61,36 @@ static inline void __pte_free_tlb(struct mmu_gather *tlb, struct page *pte,
 	___pte_free_tlb(tlb, pte);
 }
 
+/*
+ * _KERNPG_TABLE has _PAGE_USER clear which tells the KAISER code
+ * that this mapping is for kernel use only.  That makes sure that
+ * we leave the mapping usable by the kernel and do not try to
+ * sabotage it by doing stuff like setting _PAGE_NX on it.
+ */
+static inline pteval_t mm_pgtable_flags(struct mm_struct *mm)
+{
+	if (!mm || (mm == &init_mm))
+		return _KERNPG_TABLE;
+	return _PAGE_TABLE;
+}
+
 static inline void pmd_populate_kernel(struct mm_struct *mm,
 				       pmd_t *pmd, pte_t *pte)
 {
+	pteval_t pgtable_flags = mm_pgtable_flags(mm);
+
 	paravirt_alloc_pte(mm, __pa(pte) >> PAGE_SHIFT);
-	set_pmd(pmd, __pmd(__pa(pte) | _PAGE_TABLE));
+	set_pmd(pmd, __pmd(__pa(pte) | pgtable_flags));
 }
 
 static inline void pmd_populate(struct mm_struct *mm, pmd_t *pmd,
 				struct page *pte)
 {
+	pteval_t pgtable_flags = mm_pgtable_flags(mm);
 	unsigned long pfn = page_to_pfn(pte);
 
 	paravirt_alloc_pte(mm, pfn);
-	set_pmd(pmd, __pmd(((pteval_t)pfn << PAGE_SHIFT) | _PAGE_TABLE));
+	set_pmd(pmd, __pmd(((pteval_t)pfn << PAGE_SHIFT) | pgtable_flags));
 }
 
 #define pmd_pgtable(pmd) pmd_page(pmd)
@@ -117,16 +133,20 @@ extern void pud_populate(struct mm_struct *mm, pud_t *pudp, pmd_t *pmd);
 #else	/* !CONFIG_X86_PAE */
 static inline void pud_populate(struct mm_struct *mm, pud_t *pud, pmd_t *pmd)
 {
+	pteval_t pgtable_flags = mm_pgtable_flags(mm);
+
 	paravirt_alloc_pmd(mm, __pa(pmd) >> PAGE_SHIFT);
-	set_pud(pud, __pud(_PAGE_TABLE | __pa(pmd)));
+	set_pud(pud, __pud(__pa(pmd) | pgtable_flags));
 }
 #endif	/* CONFIG_X86_PAE */
 
 #if CONFIG_PGTABLE_LEVELS > 3
 static inline void p4d_populate(struct mm_struct *mm, p4d_t *p4d, pud_t *pud)
 {
+	pteval_t pgtable_flags = mm_pgtable_flags(mm);
+
 	paravirt_alloc_pud(mm, __pa(pud) >> PAGE_SHIFT);
-	set_p4d(p4d, __p4d(_PAGE_TABLE | __pa(pud)));
+	set_p4d(p4d, __p4d(__pa(pud) | pgtable_flags));
 }
 
 static inline pud_t *pud_alloc_one(struct mm_struct *mm, unsigned long addr)
@@ -155,8 +175,10 @@ static inline void __pud_free_tlb(struct mmu_gather *tlb, pud_t *pud,
 #if CONFIG_PGTABLE_LEVELS > 4
 static inline void pgd_populate(struct mm_struct *mm, pgd_t *pgd, p4d_t *p4d)
 {
+	pteval_t pgtable_flags = mm_pgtable_flags(mm);
+
 	paravirt_alloc_p4d(mm, __pa(p4d) >> PAGE_SHIFT);
-	set_pgd(pgd, __pgd(_PAGE_TABLE | __pa(p4d)));
+	set_pgd(pgd, __pgd(__pa(p4d) | pgtable_flags));
 }
 
 static inline p4d_t *p4d_alloc_one(struct mm_struct *mm, unsigned long addr)

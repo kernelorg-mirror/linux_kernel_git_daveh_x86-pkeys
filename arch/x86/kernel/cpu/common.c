@@ -5,6 +5,7 @@
 #include <linux/export.h>
 #include <linux/percpu.h>
 #include <linux/string.h>
+#include <linux/kaiser.h>
 #include <linux/ctype.h>
 #include <linux/delay.h>
 #include <linux/sched/mm.h>
@@ -98,7 +99,7 @@ static const struct cpu_dev default_cpu = {
 
 static const struct cpu_dev *this_cpu = &default_cpu;
 
-DEFINE_PER_CPU_PAGE_ALIGNED(struct gdt_page, gdt_page) = { .gdt = {
+DEFINE_PER_CPU_PAGE_ALIGNED_USER_MAPPED(struct gdt_page, gdt_page) = { .gdt = {
 #ifdef CONFIG_X86_64
 	/*
 	 * We need valid kernel segments for data and code in long mode too
@@ -487,6 +488,20 @@ static inline void setup_fixmap_gdt(int cpu)
 #endif
 
 	__set_fixmap(get_cpu_gdt_ro_index(cpu), get_cpu_gdt_paddr(cpu), prot);
+
+	/* CPU 0's mapping is done in kaiser_init() */
+	if (cpu) {
+		int ret;
+
+		ret = kaiser_add_mapping((unsigned long) get_cpu_gdt_ro(cpu),
+					 PAGE_SIZE, __PAGE_KERNEL_RO);
+		/*
+		 * We do not have a good way to fail CPU bringup.
+		 * Just WARN about it and hope we boot far enough
+		 * to get a good log out.
+		 */
+		WARN_ON(ret);
+	}
 }
 
 /* Load the original GDT from the per-cpu structure */
@@ -1345,7 +1360,7 @@ static const unsigned int exception_stack_sizes[N_EXCEPTION_STACKS] = {
 	  [DEBUG_STACK - 1]			= DEBUG_STKSZ
 };
 
-static DEFINE_PER_CPU_PAGE_ALIGNED(char, exception_stacks
+DEFINE_PER_CPU_PAGE_ALIGNED_USER_MAPPED(char, exception_stacks
 	[(N_EXCEPTION_STACKS - 1) * EXCEPTION_STKSZ + DEBUG_STKSZ]);
 
 /* May not be marked __init: used by software suspend */
@@ -1425,7 +1440,7 @@ EXPORT_PER_CPU_SYMBOL(__preempt_count);
  * the top of the kernel stack.  Use an extra percpu variable to track the
  * top of the kernel stack directly.
  */
-DEFINE_PER_CPU(unsigned long, cpu_current_top_of_stack) =
+DEFINE_PER_CPU_USER_MAPPED(unsigned long, cpu_current_top_of_stack) =
 	(unsigned long)&init_thread_union + THREAD_SIZE;
 EXPORT_PER_CPU_SYMBOL(cpu_current_top_of_stack);
 

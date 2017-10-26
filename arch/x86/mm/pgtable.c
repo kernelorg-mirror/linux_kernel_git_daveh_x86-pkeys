@@ -354,14 +354,69 @@ static inline void _pgd_free(pgd_t *pgd)
 		kmem_cache_free(pgd_cache, pgd);
 }
 #else
+
+#ifdef CONFIG_KAISER
+/*
+ * Instead of one pgd, we aquire two pgds.  Being order-1, it is
+ * both 8k in size and 8k-aligned.  That lets us just flip bit 12
+ * in a pointer to swap between the two 4k halves.
+ */
+#define PGD_ALLOCATION_ORDER 1
+#else
+#define PGD_ALLOCATION_ORDER 0
+#endif
+
+const unsigned long pgd_magic = 0x70676400 | PGD_ALLOCATION_ORDER;
+
+void tag_pgd_with_size(pgd_t *pgd, unsigned long size)
+{
+	struct page *pgd_page = virt_to_page(pgd);
+
+	/*
+	 * Make sure the size the caller is tagging with matches
+	 * the size that we need the PGD to be.  This check is a
+	 * bit superfluous for the callers within this file but
+	 * is quite necessary for the callers from outside.
+	 */
+	WARN_ON_ONCE(size != PAGE_SIZE << PGD_ALLOCATION_ORDER);
+
+	pgd_page->private = pgd_magic;
+}
+
+void clear_pgd_tag(pgd_t *pgd)
+{
+	struct page *pgd_page = virt_to_page(pgd);
+	pgd_page->private = 0;
+}
+
 static inline pgd_t *_pgd_alloc(void)
 {
-	return (pgd_t *)__get_free_page(PGALLOC_GFP);
+	pgd_t *pgd = (pgd_t *)__get_free_pages(PGALLOC_GFP,
+					       PGD_ALLOCATION_ORDER);
+	tag_pgd_with_size(pgd, PAGE_SIZE << PGD_ALLOCATION_ORDER);
+
+	return pgd;
 }
 
 static inline void _pgd_free(pgd_t *pgd)
 {
-	free_page((unsigned long)pgd);
+	clear_pgd_tag(pgd);
+	free_pages((unsigned long)pgd, PGD_ALLOCATION_ORDER);
+}
+
+void pgd_check_tag(pgd_t *pgd)
+{
+	struct page *pgd_page = virt_to_page(pgd);
+
+	if (pgd_page == virt_to_page(init_top_pgt))
+		return;
+
+	if (pgd_page->private == pgd_magic)
+		return;
+
+	if (WARN_ON_ONCE(1))
+		printk(KERN_WARNING "bad pgd page @ 0x%pK, magic: 0x%lx\n",
+				pgd, pgd_page->private);
 }
 #endif /* CONFIG_X86_PAE */
 

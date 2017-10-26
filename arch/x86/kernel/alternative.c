@@ -722,7 +722,8 @@ void *text_poke(void *addr, const void *opcode, size_t len)
 	clear_fixmap(FIX_TEXT_POKE0);
 	if (pages[1])
 		clear_fixmap(FIX_TEXT_POKE1);
-	local_flush_tlb();
+	/* Make sure to flush Global pages: */
+	__flush_tlb_all();
 	sync_core();
 	/* Could also do a CLFLUSH here to speed up CPU recovery; but
 	   that causes hangs on some VIA CPUs. */

@@ -1,0 +1,85 @@
+KAISER is a countermeasure against side channel attacks against
+kernel virtual memory.  It leaves alone the page tables that
+exist for each process and refers to them as the "kernel page
+tables".  But, it adds a second set of "shadow" (aka. user) page
+tables which are active when running userspace.
+
+Whenever we enter the kernel (syscalls, interrupts, exceptions),
+the page tables are switched to the "kernel" copy, but when the
+system switches back to user mode, the user/shadow copy is used.
+
+The minimalistic kernel portion of the user page tables try to
+map only what is needed to enter/exit the kernel such as the
+entry/exit functions themselves and the interrupt descriptor
+table (IDT).
+
+This helps ensure that side-channel attacks that leverage the
+paging structures do not function when KAISER is enabled.  It
+can be enabled by setting CONFIG_KAISER=y
+
+Protection against side-channel attacks is important.  But,
+this protection comes at a cost:
+
+1. Increased Memory Use
+  a. Statically-allocated structures must be padded out to 4k
+     (or 8k for PGDs) so they can be mapped into the user page
+     tables.
+  b. Each task now needs an order-1 PGD instead of order-0
+  c. The shadow page tables eventually grow to map all of used
+     vmalloc() space.  They can have roughly the same memory
+     consumption as the vmalloc() page tables.
+
+2. Runtime Cost
+  a. CR3 manipulation to switch between the page table copies
+     must be done at interrupt, syscall, and exception entry
+     and exit (it can be skipped when the kernel is interrupted,
+     though.)  Moves to CR3 are on the order of a hundred
+     cycles, and we need one at entry and another at exit.
+  b. Task stacks must be mapped/unmapped.  We need to walk
+     and modify the shadow page tables at fork() and exit().
+  c. Global pages are disabled.  This feature of the MMU
+     allows different processes to share TLB entries mapping
+     the kernel.  Losing the feature means potentially more
+     TLB misses after a context switch.
+  d. Process Context IDentifiers (PCID) is a CPU feature that
+     allows us to skip flushing the entire TLB when we switch
+     the page tables.  This makes switching the page tables
+     (at context switch, or kernel entry/exit) cheaper.  But,
+     on systems with PCID support, the context switch code
+     must flush both the user and kernel entries out of the
+     TLB, with an INVPCID in addition to the CR3 write.  This
+     INVPCID is generally slower than a CR3 write, but still
+     on the order of a hundred cycles.
+  e. The shadow page tables must be populated for each new
+     process.  Even without KAISER, since we share all of the
+     kernel mappings in all processes, we can do all this
+     population for kernel addresses at the top level of the
+     page tables (the PGD level).  But, with KAISER, we now
+     have *two* kernel mappings: one in the kernel page tables
+     that maps everything and one in the user/shadow page
+     tables mapping the "minimal" kernel.  At fork(), we
+     copy the portion of the shadow PGD that maps the minimal
+     kernel structures in addition to the normal kernel one.
+  f. In addition to the fork()-time copying, we must also
+     update the shadow PGD any time a set_pgd() is done on a
+     PGD used to map userspace.  This ensures that the kernel
+     and user/shadow copies always map the same userspace
+     memory.
+  g. On systems without PCID support, each CR3 write flushes
+     the entire TLB.  That means that each syscall, interrupt
+     or exception flushes the TLB.
+
+Future work:
+1. We can be more careful about not actually writing to CR3
+   unless we actually switch it.
+2. Try to have dedicated entry/exist kernel stacks so we do
+   not have to map/unmap the task/thread stacks.
+3. Compress the user/shadow-mapped data to be mapped together
+   underneath a single PGD entry.
+4. Re-enable global pages, but use them for mappings in the
+   user/shadow page tables.  This would allow the kernel to
+   take advantage of TLB entries that were established from
+   the user page tables.  This might speed up the entry/exit
+   code or userspace since it will not have to reload all of
+   its TLB entries.  However, its upside is limited by PCID
+   being used.

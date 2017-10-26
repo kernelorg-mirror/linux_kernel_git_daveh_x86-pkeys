@@ -13,7 +13,7 @@ static inline void __invpcid(unsigned long pcid, unsigned long addr,
 			     unsigned long type)
 {
 	struct { u64 d[2]; } desc = { { pcid, addr } };
-
+	void *ptr = &desc;
 	/*
 	 * The memory clobber is because the whole point is to invalidate
 	 * stale TLB entries and, especially if we're flushing global
@@ -24,7 +24,7 @@ static inline void __invpcid(unsigned long pcid, unsigned long addr,
 	 * invpcid (%rcx), %rax in long mode.
 	 */
 	asm volatile (".byte 0x66, 0x0f, 0x38, 0x82, 0x01"
-		      : : "m" (desc), "a" (type), "c" (&desc) : "memory");
+		      : : "m" (desc), "a" (type), "c" (ptr) : "memory");
 }
 
 #define INVPCID_TYPE_INDIV_ADDR		0
@@ -48,13 +48,13 @@ static inline void invpcid_flush_single_context(unsigned long pcid)
 /* Flush all mappings, including globals, for all PCIDs. */
 static inline void invpcid_flush_all(void)
 {
-	__invpcid(0, 0, INVPCID_TYPE_ALL_INCL_GLOBAL);
+	__invpcid(0x123, 0x456, INVPCID_TYPE_ALL_INCL_GLOBAL);
 }
 
 /* Flush all mappings for all PCIDs except globals. */
 static inline void invpcid_flush_all_nonglobals(void)
 {
-	__invpcid(0, 0, INVPCID_TYPE_ALL_NON_GLOBAL);
+	__invpcid(0x123, 0x456, INVPCID_TYPE_ALL_NON_GLOBAL);
 }
 
 static inline u64 inc_mm_tlb_gen(struct mm_struct *mm)
@@ -72,6 +72,97 @@ static inline u64 inc_mm_tlb_gen(struct mm_struct *mm)
 	smp_mb__after_atomic();
 
 	return new_tlb_gen;
+}
+
+/* There are 12 bits of space for ASIDS in CR3 */
+#define CR3_HW_ASID_BITS 12
+/* When enabled, KAISER consumes a single bit for user/kernel switches */
+#ifdef CONFIG_KAISER
+#define X86_CR3_KAISER_SWITCH_BIT 11
+#define KAISER_CONSUMED_ASID_BITS 1
+#else
+#define KAISER_CONSUMED_ASID_BITS 0
+#endif
+
+#define CR3_AVAIL_ASID_BITS (CR3_HW_ASID_BITS-KAISER_CONSUMED_ASID_BITS)
+/*
+ * We lose a single extra ASID because 0 is reserved for use
+ * by non-PCID-aware users.
+ */
+#define NR_AVAIL_ASIDS ((1<<CR3_AVAIL_ASID_BITS) - 1)
+
+/*
+ * 6 because 6 should be plenty and struct tlb_state will fit in
+ * two cache lines.
+ */
+#define TLB_NR_DYN_ASIDS 6
+
+static inline u16 kern_asid(u16 asid)
+{
+	VM_WARN_ON_ONCE(asid >= NR_AVAIL_ASIDS);
+
+#ifdef CONFIG_KAISER
+	/*
+	 * Make sure that the dynamic ASID space does not confict
+	 * with the bit we are using to switch between user and
+	 * kernel ASIDs.
+	 */
+	BUILD_BUG_ON(TLB_NR_DYN_ASIDS >= (1<<X86_CR3_KAISER_SWITCH_BIT));
+
+	/*
+	 * The ASID being passed in here should have respected
+	 * the NR_AVAIL_ASIDS and thus never have the switch
+	 * bit set.
+	 */
+	VM_WARN_ON_ONCE(asid & (1<<X86_CR3_KAISER_SWITCH_BIT));
+#endif
+	/*
+	 * The dynamically-assigned ASIDs that get passed in  are
+	 * small (<TLB_NR_DYN_ASIDS).  They never have the high
+	 * switch bit set, so do not bother to clear it.
+	 */
+
+	/*
+	 * If PCID is on, ASID-aware code paths put the ASID+1
+	 * into the PCID bits.  This serves two purposes.  It
+	 * prevents a nasty situation in which PCID-unaware code
+	 * saves CR3, loads some other value (with PCID == 0),
+	 * and then restores CR3, thus corrupting the TLB for
+	 * ASID 0 if the saved ASID was nonzero.  It also means
+	 * that any bugs involving loading a PCID-enabled CR3
+	 * with CR4.PCIDE off will trigger deterministically.
+	 */
+	return asid + 1;
+}
+
+/*
+ * The user ASID is just the kernel one, plus the "switch bit".
+ */
+static inline u16 user_asid(u16 asid)
+{
+	u16 ret = kern_asid(asid);
+#ifdef CONFIG_KAISER
+	ret |= 1<<X86_CR3_KAISER_SWITCH_BIT;
+#endif
+	return ret;
+}
+
+struct pgd_t;
+static inline unsigned long build_cr3(pgd_t *pgd, u16 asid)
+{
+	if (static_cpu_has(X86_FEATURE_PCID)) {
+		return __sme_pa(pgd) | kern_asid(asid);
+	} else {
+		VM_WARN_ON_ONCE(asid != 0);
+		return __sme_pa(pgd);
+	}
+}
+
+static inline unsigned long build_cr3_noflush(pgd_t *pgd, u16 asid)
+{
+	VM_WARN_ON_ONCE(asid > NR_AVAIL_ASIDS);
+	VM_WARN_ON_ONCE(!this_cpu_has(X86_FEATURE_PCID));
+	return __sme_pa(pgd) | kern_asid(asid) | CR3_NOFLUSH;
 }
 
 #ifdef CONFIG_PARAVIRT
@@ -97,12 +188,6 @@ static inline bool tlb_defer_switch_to_init_mm(void)
 	 */
 	return !static_cpu_has(X86_FEATURE_PCID);
 }
-
-/*
- * 6 because 6 should be plenty and struct tlb_state will fit in
- * two cache lines.
- */
-#define TLB_NR_DYN_ASIDS 6
 
 struct tlb_context {
 	u64 ctx_id;
@@ -136,6 +221,17 @@ struct tlb_state {
 	 *    lazy mode.
 	 */
 	bool is_lazy;
+
+	/*
+	 * If set we changed the page tables in such a way that we
+	 * needed an invalidation of all contexts (aka. PCIDs / ASIDs).
+	 * This tells us to go invalidate all the non-loaded ctxs[]
+	 * on the next context switch.
+	 *
+	 * The current ctx was kept up-to-date as it ran and does not
+	 * need to be invalidated.
+	 */
+	bool all_other_ctxs_invalid;
 
 	/*
 	 * Access to this CR4 shadow and to H/W CR4 is protected by
@@ -214,6 +310,19 @@ static inline unsigned long cr4_read_shadow(void)
 	return this_cpu_read(cpu_tlbstate.cr4);
 }
 
+static inline void tlb_flush_shared_nonglobals(void)
+{
+	/*
+	 * With global pages, all of the shared kenel page tables
+	 * are set as _PAGE_GLOBAL.  We have no shared nonglobals
+	 * and nothing to do here.
+	 */
+	if (IS_ENABLED(CONFIG_X86_GLOBAL_PAGES))
+		return;
+
+	this_cpu_write(cpu_tlbstate.all_other_ctxs_invalid, true);
+}
+
 /*
  * Save some of cr4 feature set we're using (e.g.  Pentium 4MB
  * enable and PPro Global page enable), so that any CPU's that boot
@@ -235,14 +344,38 @@ extern void initialize_tlbstate_and_flush(void);
 
 static inline void __native_flush_tlb(void)
 {
+	if (!cpu_feature_enabled(X86_FEATURE_INVPCID)) {
+		/*
+		 * native_write_cr3() only clears the current PCID if
+		 * CR4 has X86_CR4_PCIDE set.  In other words, this does
+		 * not fully flush the TLB if PCIDs are in use.  Warn if
+		 * it gets called.
+		 */
+		WARN_ON_ONCE(this_cpu_read(cpu_tlbstate.cr4) & X86_CR4_PCIDE);
+		/*
+		 * If current->mm == NULL then we borrow a mm
+		 * which may change during a task switch and
+		 * therefore we must not be preempted while we
+		 * write CR3 back:
+		 */
+		preempt_disable();
+		native_write_cr3(__native_read_cr3());
+		preempt_enable();
+		/*
+		 * Does not need tlb_flush_shared_nonglobals()
+		 * since the CR3 write without PCIDs flushes all
+		 * non-globals.
+		 */
+		return;
+	}
 	/*
-	 * If current->mm == NULL then we borrow a mm which may change during a
-	 * task switch and therefore we must not be preempted while we write CR3
-	 * back:
+	 * We are no longer using globals with KAISER, so a
+	 * "nonglobals" flush would work too. But, this is more
+	 * conservative.
+	 *
+	 * Note, this works with CR4.PCIDE=0 or 1.
 	 */
-	preempt_disable();
-	native_write_cr3(__native_read_cr3());
-	preempt_enable();
+	invpcid_flush_all();
 }
 
 static inline void __native_flush_tlb_global_irq_disabled(void)
@@ -250,7 +383,18 @@ static inline void __native_flush_tlb_global_irq_disabled(void)
 	unsigned long cr4;
 
 	cr4 = this_cpu_read(cpu_tlbstate.cr4);
-	/* clear PGE */
+	/*
+	 * According to the SDM, a MOV to CR4 invalidates all TLB
+	 * entries (including global entries) and all entries in
+	 * all paging-structure caches (for all PCIDs) if it
+	 * changes the value of CR4.PGE or changes CR4.PCIDE
+	 * from 1->0.
+	 *
+	 * We can not change CR4.PCIDE 1->0 if we have a non-zero
+	 * PCID in CR3, so just toggle X86_CR4_PGE.  But,
+	 * this will clear all PCIDs, just as if X86_CR4_PCIDE
+	 * had also been toggled.
+	 */
 	native_write_cr4(cr4 & ~X86_CR4_PGE);
 	/* write old PGE again and flush TLBs */
 	native_write_cr4(cr4);
@@ -264,6 +408,8 @@ static inline void __native_flush_tlb_global(void)
 		/*
 		 * Using INVPCID is considerably faster than a pair of writes
 		 * to CR4 sandwiched inside an IRQ flag save/restore.
+		 *
+		 * Note, this works with CR4.PCIDE=0 or 1.
 		 */
 		invpcid_flush_all();
 		return;
@@ -283,29 +429,51 @@ static inline void __native_flush_tlb_global(void)
 
 static inline void __native_flush_tlb_single(unsigned long addr)
 {
-	asm volatile("invlpg (%0)" ::"r" (addr) : "memory");
+	u32 loaded_mm_asid = this_cpu_read(cpu_tlbstate.loaded_mm_asid);
+
+	/*
+	 * Some platforms #GP if we call invpcid(type=1/2) before
+	 * CR4.PCIDE=1.  Just call invpcid in the case we are called
+	 * early.
+	 */
+	if (!this_cpu_has(X86_FEATURE_INVPCID_SINGLE)) {
+		asm volatile("invlpg (%0)" ::"r" (addr) : "memory");
+		return;
+	}
+	/* Flush the address out of both PCIDs. */
+	/*
+	 * An optimization here might be to determine addresses
+	 * that are only kernel-mapped and only flush the kernel
+	 * ASID.  But, userspace flushes are probably much more
+	 * important performance-wise.
+	 *
+	 * Make sure to do only a single invpcid when KAISER is
+	 * disabled and we have only a single ASID.
+	 */
+	if (kern_asid(loaded_mm_asid) != user_asid(loaded_mm_asid))
+		invpcid_flush_one(user_asid(loaded_mm_asid), addr);
+	invpcid_flush_one(kern_asid(loaded_mm_asid), addr);
 }
 
 static inline void __flush_tlb_all(void)
 {
-	if (boot_cpu_has(X86_FEATURE_PGE))
+	if (boot_cpu_has(X86_FEATURE_PGE)) {
 		__flush_tlb_global();
-	else
+	} else {
 		__flush_tlb();
-
-	/*
-	 * Note: if we somehow had PCID but not PGE, then this wouldn't work --
-	 * we'd end up flushing kernel translations for the current ASID but
-	 * we might fail to flush kernel translations for other cached ASIDs.
-	 *
-	 * To avoid this issue, we force PCID off if PGE is off.
-	 */
+		tlb_flush_shared_nonglobals();
+	}
 }
 
 static inline void __flush_tlb_one(unsigned long addr)
 {
 	count_vm_tlb_event(NR_TLB_LOCAL_FLUSH_ONE);
 	__flush_tlb_single(addr);
+	/*
+	 * Invalidate other address spaces inaccessible to single-page
+	 * invalidation:
+	 */
+	tlb_flush_shared_nonglobals();
 }
 
 #define TLB_FLUSH_ALL	-1UL

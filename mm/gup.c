@@ -36,6 +36,20 @@ static struct page *no_page_table(struct vm_area_struct *vma,
 	return NULL;
 }
 
+enum pgtable_levels {
+	PGD_LEVEL = 5,
+	P4D_LEVEL = 4,
+	PUD_LEVEL = 3,
+	PMD_LEVEL = 2,
+	PTE_LEVEL = 1
+};
+/* noinline so the call site is visible in backtrace */
+noinline static struct page *bad_page_table(enum pgtable_levels level)
+{
+	WARN_ONCE(1, "bad page table at level %d\n", level);
+	return NULL;
+}
+
 static int follow_pfn_pte(struct vm_area_struct *vma, unsigned long address,
 		pte_t *pte, unsigned int flags)
 {
@@ -81,7 +95,7 @@ static struct page *follow_page_pte(struct vm_area_struct *vma,
 
 retry:
 	if (unlikely(pmd_bad(*pmd)))
-		return no_page_table(vma, flags);
+		return bad_page_table(PMD_LEVEL);
 
 	ptep = pte_offset_map_lock(mm, pmd, address, &ptl);
 	pte = *ptep;
@@ -334,7 +348,7 @@ static struct page *follow_pud_mask(struct vm_area_struct *vma,
 			return page;
 	}
 	if (unlikely(pud_bad(*pud)))
-		return no_page_table(vma, flags);
+		return bad_page_table(PUD_LEVEL);
 
 	return follow_pmd_mask(vma, address, pud, flags, page_mask);
 }
@@ -352,7 +366,7 @@ static struct page *follow_p4d_mask(struct vm_area_struct *vma,
 		return no_page_table(vma, flags);
 	BUILD_BUG_ON(p4d_huge(*p4d));
 	if (unlikely(p4d_bad(*p4d)))
-		return no_page_table(vma, flags);
+		return bad_page_table(P4D_LEVEL);
 
 	if (is_hugepd(__hugepd(p4d_val(*p4d)))) {
 		page = follow_huge_pd(vma, address,
@@ -397,8 +411,10 @@ struct page *follow_page_mask(struct vm_area_struct *vma,
 
 	pgd = pgd_offset(mm, address);
 
-	if (pgd_none(*pgd) || unlikely(pgd_bad(*pgd)))
+	if (pgd_none(*pgd))
 		return no_page_table(vma, flags);
+	if (unlikely(pgd_bad(*pgd)))
+		return bad_page_table(PGD_LEVEL);
 
 	if (pgd_huge(*pgd)) {
 		page = follow_huge_pgd(mm, address, pgd, flags);

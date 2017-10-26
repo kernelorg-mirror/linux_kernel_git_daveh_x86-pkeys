@@ -4,6 +4,7 @@
  * This file is licensed under the GPL V2
  */
 #include <linux/interrupt.h>
+#include <linux/kaiser.h>
 
 #include <asm/traps.h>
 #include <asm/proto.h>
@@ -220,6 +221,8 @@ static void
 idt_setup_from_table(gate_desc *idt, const struct idt_data *t, int size, bool sys)
 {
 	gate_desc desc;
+
+	kaiser_check_user_mapped(t->addr);
 
 	for (; size > 0; t++, size--) {
 		idt_init_desc(&desc, t);

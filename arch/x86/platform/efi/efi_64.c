@@ -69,6 +69,35 @@ static void __init early_code_mapping_set_exec(int executable)
 	}
 }
 
+/*
+ * This is an unapologetic hack.  KAISER PGDs have the NX bit set
+ * on the entries mapping userspace.  See native_set_pgd() for an
+ * explanation.  Unfortunately, EFI runs in what are traditionally
+ * userspace addresses and setting NX on the PGDs will keep EFI
+ * calls from being able to run.
+ *
+ * We do not have a nice pgd_clear_flags() like we have for ptes,
+ * so just hack this in here rather than complicate set_pgd().
+ */
+void pgd_clear_nx(void *__pgd)
+{
+#ifdef CONFIG_KAISER
+	unsigned long *pgd = __pgd;
+	/*
+	 * The EFI code always passes init_mm to the pagetable
+	 * allocation functions, which should trigger them
+	 * via mm_pgtable_flags() set _PAGE_USER, which will
+	 * then trigger the KAISER code to not set _PAGE_NX.
+	 *
+	 * This is probably superfluous, but make it safe and
+	 * warn if the mm_pgtable_flags() stuff did not work
+	 * out somehow.
+	 */
+	WARN_ON_ONCE(*pgd & _PAGE_NX);
+	*pgd &= ~_PAGE_NX;
+#endif
+}
+
 pgd_t * __init efi_call_phys_prolog(void)
 {
 	unsigned long vaddr, addr_pgd, addr_p4d, addr_pud;
@@ -105,6 +134,7 @@ pgd_t * __init efi_call_phys_prolog(void)
 		save_pgd[pgd] = *pgd_efi;
 
 		p4d = p4d_alloc(&init_mm, pgd_efi, addr_pgd);
+		pgd_clear_nx(pgd_efi);
 		if (!p4d) {
 			pr_err("Failed to allocate p4d table!\n");
 			goto out;
@@ -115,6 +145,7 @@ pgd_t * __init efi_call_phys_prolog(void)
 			p4d_efi = p4d + p4d_index(addr_p4d);
 
 			pud = pud_alloc(&init_mm, p4d_efi, addr_p4d);
+			pgd_clear_nx(p4d_efi);
 			if (!pud) {
 				pr_err("Failed to allocate pud table!\n");
 				goto out;
@@ -201,27 +232,45 @@ int __init efi_alloc_page_tables(void)
 	p4d_t *p4d;
 	pud_t *pud;
 	gfp_t gfp_mask;
+	int pgd_order = 0;
+
+	/*
+	 * set_pgd() assumes that there is a shadow PGD for all
+	 * pgds.  Without one, it goes off writing on whatever
+	 * page happened to be after the PGD.  We can either use
+	 * something other than set_pgd(), or just add a shadow
+	 * page.  Just do the shadow page.  We should never
+	 * actually use this shadow PGD, though.
+	 */
+	if (IS_ENABLED(CONFIG_KAISER))
+		pgd_order = 1;
 
 	if (efi_enabled(EFI_OLD_MEMMAP))
 		return 0;
 
 	gfp_mask = GFP_KERNEL | __GFP_NOTRACK | __GFP_ZERO;
-	efi_pgd = (pgd_t *)__get_free_page(gfp_mask);
+	efi_pgd = (pgd_t *)__get_free_pages(gfp_mask, pgd_order);
+	tag_pgd_with_size(efi_pgd, PAGE_SIZE << pgd_order);
 	if (!efi_pgd)
 		return -ENOMEM;
 
 	pgd = efi_pgd + pgd_index(EFI_VA_END);
 	p4d = p4d_alloc(&init_mm, pgd, EFI_VA_END);
+	/* PGDs "appear" at the P4D level when PGTABLE_LEVELS=4 */
+	pgd_clear_nx(pgd);
 	if (!p4d) {
-		free_page((unsigned long)efi_pgd);
+		clear_pgd_tag(efi_pgd);
+		free_pages((unsigned long)efi_pgd, pgd_order);
 		return -ENOMEM;
 	}
 
 	pud = pud_alloc(&init_mm, p4d, EFI_VA_END);
+	pgd_clear_nx(pud);
 	if (!pud) {
 		if (CONFIG_PGTABLE_LEVELS > 4)
 			free_page((unsigned long) pgd_page_vaddr(*pgd));
-		free_page((unsigned long)efi_pgd);
+		clear_pgd_tag(efi_pgd);
+		free_pages((unsigned long)efi_pgd, pgd_order);
 		return -ENOMEM;
 	}
 
@@ -233,6 +282,7 @@ int __init efi_alloc_page_tables(void)
  */
 void efi_sync_low_kernel_mappings(void)
 {
+	int i;
 	unsigned num_entries;
 	pgd_t *pgd_k, *pgd_efi;
 	p4d_t *p4d_k, *p4d_efi;
@@ -257,7 +307,12 @@ void efi_sync_low_kernel_mappings(void)
 	pgd_k = pgd_offset_k(PAGE_OFFSET);
 
 	num_entries = pgd_index(EFI_VA_END) - pgd_index(PAGE_OFFSET);
-	memcpy(pgd_efi, pgd_k, sizeof(pgd_t) * num_entries);
+	for (i = 0; i < num_entries; i++) {
+		pgd_efi[i] = pgd_k[i];
+		pgd_clear_nx(&pgd_efi[i]);
+		if (IS_ENABLED(CONFIG_KAISER))
+			pgd_efi[i + PTRS_PER_PGD] = pgd_k[i];
+	}
 
 	/*
 	 * As with PGDs, we share all P4D entries apart from the one entry
@@ -272,7 +327,12 @@ void efi_sync_low_kernel_mappings(void)
 	p4d_k = p4d_offset(pgd_k, 0);
 
 	num_entries = p4d_index(EFI_VA_END);
-	memcpy(p4d_efi, p4d_k, sizeof(p4d_t) * num_entries);
+	for (i = 0; i < num_entries; i++) {
+		p4d_efi[i] = p4d_k[i];
+		pgd_clear_nx(&p4d_efi[i]);
+		if (IS_ENABLED(CONFIG_KAISER))
+			p4d_efi[i + PTRS_PER_PGD] = p4d_k[i];
+	}
 
 	/*
 	 * We share all the PUD entries apart from those that map the
@@ -405,6 +465,9 @@ int __init efi_setup_page_tables(unsigned long pa_memmap, unsigned num_pages)
 
 static void __init __map_region(efi_memory_desc_t *md, u64 va)
 {
+	int pgd_nr;
+	int start_pgd_nr;
+	int end_pgd_nr;
 	unsigned long flags = _PAGE_RW;
 	unsigned long pfn;
 	pgd_t *pgd = efi_pgd;
@@ -416,6 +479,12 @@ static void __init __map_region(efi_memory_desc_t *md, u64 va)
 	if (kernel_map_pages_in_pgd(pgd, pfn, va, md->num_pages, flags))
 		pr_warn("Error mapping PA 0x%llx -> VA 0x%llx!\n",
 			   md->phys_addr, va);
+
+	start_pgd_nr = pgd_index(va);
+	end_pgd_nr = pgd_index(va + md->num_pages * PAGE_SIZE);
+	for (pgd_nr = start_pgd_nr; pgd_nr <= end_pgd_nr; pgd_nr++)
+		pgd_clear_nx(&efi_pgd[pgd_nr]);
+
 }
 
 void __init efi_map_region(efi_memory_desc_t *md)
